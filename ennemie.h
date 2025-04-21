@@ -1,4 +1,4 @@
-#ifndef ENEMY_H
+ #ifndef ENEMY_H
 #define ENEMY_H
 
 #include <SDL/SDL.h>
@@ -6,7 +6,8 @@
 #include <SDL/SDL_ttf.h>
 
 #define NUM_ENEMIES 2
-#define NB_IMG 4
+#define NB_IMG 8
+#define NB_IMG2 8
 
 typedef enum {
     ENEMY_ALIVE,
@@ -15,7 +16,7 @@ typedef enum {
 } EnemyState;
 
 typedef struct {
-    SDL_Rect position;
+    SDL_Rect pos;
     SDL_Surface *t[NB_IMG];
     int speed;
     int direction;
@@ -33,13 +34,14 @@ typedef struct {
 typedef struct {
     SDL_Rect pos;
     SDL_Surface *img;
-    int collected;
-} Coin;
+    SDL_Surface *frames[NB_IMG];
+} Player;
 
 typedef struct {
     SDL_Rect pos;
     SDL_Surface *img;
-} Player;
+    int collected;
+} Coin;
 
 void initEnemies(EnemyManager *manager);
 void init2(EnemyManager *manager);
@@ -59,4 +61,3 @@ void freeCoin(Coin *coin);
 void renderCoinCounter(int coinCount, SDL_Surface *screen);
 
 #endif
-
