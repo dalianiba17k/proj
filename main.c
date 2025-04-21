@@ -4,12 +4,12 @@
 #include <time.h>
 #include "ennemie.h"
 
-#define SCREEN_WIDTH 1000
-#define SCREEN_HEIGHT 600
+#define SCREEN_WIDTH 1920
+#define SCREEN_HEIGHT 1080
 #define FPS 60
 
 void movePlayer(Player *player, SDL_Event *event) {
-    const int SPEED = 5;
+    const int SPEED = 10;
 
     if(event->key.keysym.sym == SDLK_UP) player->pos.y -= SPEED;
     if(event->key.keysym.sym == SDLK_DOWN) player->pos.y += SPEED;
@@ -50,7 +50,6 @@ int main(int argc, char *argv[]) {
     int frame = 0;
     Uint32 lastFrameTime = SDL_GetTicks();
 
-    SDL_Rect playerBB = {player.pos.x, player.pos.y, 64, 64};
     int coinCount = 0;
     Coin coin;
     initCoin(&coin);
@@ -60,9 +59,7 @@ int main(int argc, char *argv[]) {
             if(event.type == SDL_QUIT)
                 running = 0;
             if(event.type == SDL_KEYDOWN) {
-                movePlayer(&player, &event);  
-                playerBB.x = player.pos.x;
-                playerBB.y = player.pos.y;
+                movePlayer(&player, &event);
             }
         }
 
@@ -76,7 +73,7 @@ int main(int argc, char *argv[]) {
             for(int i = 0; i < NUM_ENEMIES; i++) {
                 if(manager.enemies[i].level == manager.currentLevel && 
                    manager.enemies[i].state != ENEMY_NEUTRALIZED) {
-                    touch(&manager.enemies[i], playerBB);
+                    touch(&manager.enemies[i], player.pos);
                     updateEnemyState(&manager.enemies[i]);
 
                     if(manager.enemies[i].state == ENEMY_NEUTRALIZED && manager.currentLevel == 1) {
@@ -86,8 +83,7 @@ int main(int argc, char *argv[]) {
             }
 
             updateCoin(&coin);
-
-            if(!coin.collected && checkCoinCollision(coin, playerBB)) {
+            if(!coin.collected && checkCoinCollision(coin, player.pos)) {
                 coin.collected = 1;
                 coinCount++;
             }
@@ -97,6 +93,10 @@ int main(int argc, char *argv[]) {
             renderCoin(coin, screen);
             renderCoinCounter(coinCount, screen);
             SDL_BlitSurface(player.img, NULL, screen, &player.pos);
+
+            // Affiche une boîte verte autour du joueur
+            SDL_FillRect(screen, &player.pos, SDL_MapRGB(screen->format, 0, 255, 0));
+
             SDL_Flip(screen);
         }
     }
@@ -109,4 +109,3 @@ int main(int argc, char *argv[]) {
     SDL_Quit();
     return 0;
 }
-
