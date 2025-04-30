@@ -1,111 +1,93 @@
-#include <SDL/SDL.h>
-#include <SDL/SDL_image.h>
-#include <SDL/SDL_ttf.h>
-#include <time.h>
-#include "ennemie.h"
+#include "game.h"
+#include "functions.h"
+#include "level.h"
 
-#define SCREEN_WIDTH 1920
-#define SCREEN_HEIGHT 1080
-#define FPS 60
 
-void movePlayer(Player *player, SDL_Event *event) {
-    const int SPEED = 10;
 
-    if(event->key.keysym.sym == SDLK_UP) player->pos.y -= SPEED;
-    if(event->key.keysym.sym == SDLK_DOWN) player->pos.y += SPEED;
-    if(event->key.keysym.sym == SDLK_LEFT) player->pos.x -= SPEED;
-    if(event->key.keysym.sym == SDLK_RIGHT) player->pos.x += SPEED;
-}
+int game_menu(GAME *game);
+int get_config(GAME *game);
 
 int main(int argc, char *argv[]) {
-    if(SDL_Init(SDL_INIT_VIDEO) < 0) {
-        fprintf(stderr, "Erreur SDL_Init: %s\n", SDL_GetError());
-        return 1;
+    GAME game = {0}; // Initialisation à zéro pour éviter un comportement indéfini
+
+    // Initialisation des sous-systèmes SDL
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return EXIT_FAILURE;
     }
 
-    if(TTF_Init() == -1) {
-        fprintf(stderr, "Erreur TTF_Init: %s\n", TTF_GetError());
+    // Définition du titre et de l'icône de la fenêtre
+    SDL_WM_SetCaption("It never ends", NULL);
+    SDL_Surface *icon = IMG_Load("DATA/GFX/GUI/Loupe.png");
+    if (!icon) {
+        fprintf(stderr, "Failed to load icon: %s\n", IMG_GetError());
+    } else {
+        SDL_WM_SetIcon(icon, NULL);
+        SDL_FreeSurface(icon); // Libération de la surface après utilisation
+    }
+
+    // Chargement de la configuration ou utilisation des valeurs par défaut
+    if (get_config(&game) == 0) {
+        game.screen = SDL_SetVideoMode(game.config.resolution_w, game.config.resolution_h, 32,
+                                       SDL_DOUBLEBUF | SDL_HWSURFACE);
+    } else {
+        // Configuration par défaut si le fichier de config est absent
+        game.screen = SDL_SetVideoMode(1280, 720, 32, SDL_DOUBLEBUF | SDL_HWSURFACE);
+    }
+
+    // Vérification de l'initialisation de l'écran
+    if (!game.screen) {
+        fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
         SDL_Quit();
-        return 1;
+        return EXIT_FAILURE;
     }
 
-    SDL_Surface *screen = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, 32, SDL_HWSURFACE | SDL_DOUBLEBUF);
-    SDL_WM_SetCaption("Niveaux avec Ennemis", NULL);
-    IMG_Init(IMG_INIT_PNG);
-
-    srand(time(NULL));
-
-    EnemyManager manager;
-    initEnemies(&manager);
-
-    Player player;
-    player.pos.x = 300;
-    player.pos.y = 300;
-    player.pos.w = 64;
-    player.pos.h = 64;
-    player.img = IMG_Load("joueur.png");
-
-    SDL_Event event;
-    int running = 1;
-    int frame = 0;
-    Uint32 lastFrameTime = SDL_GetTicks();
-
-    int coinCount = 0;
-    Coin coin;
-    initCoin(&coin);
-
-    while(running) {
-        while(SDL_PollEvent(&event)) {
-            if(event.type == SDL_QUIT)
-                running = 0;
-            if(event.type == SDL_KEYDOWN) {
-                movePlayer(&player, &event);
-            }
-        }
-
-        Uint32 currentTime = SDL_GetTicks();
-        if(currentTime > lastFrameTime + 1000/FPS) {
-            frame = (frame + 1) % NB_IMG;
-            lastFrameTime = currentTime;
-
-            updateEnemies(&manager);
-
-            for(int i = 0; i < NUM_ENEMIES; i++) {
-                if(manager.enemies[i].level == manager.currentLevel && 
-                   manager.enemies[i].state != ENEMY_NEUTRALIZED) {
-                    touch(&manager.enemies[i], player.pos);
-                    updateEnemyState(&manager.enemies[i]);
-
-                    if(manager.enemies[i].state == ENEMY_NEUTRALIZED && manager.currentLevel == 1) {
-                        manager.currentLevel = 2;
-                    }
-                }
-            }
-
-            updateCoin(&coin);
-            if(!coin.collected && checkCoinCollision(coin, player.pos)) {
-                coin.collected = 1;
-                coinCount++;
-            }
-
-            SDL_FillRect(screen, NULL, SDL_MapRGB(screen->format, 0, 0, 0));
-            animer(&manager, screen, frame);
-            renderCoin(coin, screen);
-            renderCoinCounter(coinCount, screen);
-            SDL_BlitSurface(player.img, NULL, screen, &player.pos);
-
-            // Affiche une boîte verte autour du joueur
-            SDL_FillRect(screen, &player.pos, SDL_MapRGB(screen->format, 0, 255, 0));
-
-            SDL_Flip(screen);
-        }
+    // Initialisation de TTF et SDL_Mixer
+    if (TTF_Init() < 0) {
+        fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
+        SDL_Quit();
+        return EXIT_FAILURE;
     }
 
-    freeEnemies(&manager);
-    freeCoin(&coin);
-    SDL_FreeSurface(player.img);
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) == -1) {
+        fprintf(stderr, "Mix_OpenAudio failed: %s\n", Mix_GetError());
+        TTF_Quit();
+        SDL_Quit();
+        return EXIT_FAILURE;
+    }
+
+    // Affichage de l'écran de chargement
+    loading_screen(&game);
+
+    // Démarrage du menu du jeu
+    start_menu(&game);
+
+    // Nettoyage des ressources
+    SDL_FreeSurface(game.screen);
     TTF_Quit();
-    IMG_Quit();
+    Mix_CloseAudio();
     SDL_Quit();
-    return 0;
+
+    return EXIT_SUCCESS;
+}
+
+int get_config(GAME *game) {
+    game->config.f = fopen("config/config.cfg", "r");
+    if (game->config.f != NULL) {
+        fscanf(game->config.f, "[resolution]\n");
+        fscanf(game->config.f, "w=%d\n", &game->config.resolution_w);
+        fscanf(game->config.f, "h=%d\n", &game->config.resolution_h);
+        // La ligne suivante est supprimée car fullscreen n'est plus utilisé
+        // fscanf(game->config.f, "fullscreen=%d\n", &game->config.fullscreen);
+        fclose(game->config.f);
+        return 0;
+    } else {
+        return -1; // Retourne -1 si le fichier est absent
+    }
+}
+
+void start_menu(GAME *game) {
+    if (game_menu(game) == 0) {
+        playLevel(game);
+    }
 }

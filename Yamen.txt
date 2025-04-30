@@ -1,0 +1,4113 @@
+##### Liste des fichiers inclus : menuQuit.c,declarations.h menu.c,enemy.c level.h,items.h character.h,enum.h display.c,collisions.c menu.h,game.h arduinoReadWrite.c,objects.h bullet.c,functions.c events.c,level.c display.h,items.c bullet.h,main.c functions.h,mouvement.c collision.h
+
+
+##### ./menuQuit.c #####
+#include "game.h"
+
+/**
+
+* @file menuQuit.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+void saving_menu(GAME *game, Dialogue dialogue)
+{
+	dialogue.btnYes = dialogue.saveYESa;
+	dialogue.btnNo = dialogue.saveNOb;
+
+	if (dialogue.interrupt == 1)
+	{
+		if (dialogue.saving_state == 1)
+		{
+			dialogue.btnYes = dialogue.saveYESa;
+			dialogue.btnNo = dialogue.saveNOb;
+
+		}
+		else if (dialogue.saving_state == 2)
+		{
+			dialogue.btnYes = dialogue.saveYESb;
+			dialogue.btnNo = dialogue.saveNOa;
+		}
+
+        SDL_BlitSurface(dialogue.dialogue, NULL, game->screen, &dialogue.positionD);
+        SDL_BlitSurface(dialogue.btnYes, NULL, game->screen, &dialogue.positionYES);
+        SDL_BlitSurface(dialogue.btnNo, NULL, game->screen, &dialogue.positionNO);
+
+
+	SDL_Flip(game->screen);
+
+	}
+
+}
+
+void load_menuQuit(GAME *game)
+{
+
+	game->dialogue.dialogue = IMG_Load("DATA/GFX/GUI/Savingame.png");
+	game->dialogue.saveYESa = IMG_Load("DATA/GFX/GUI/yesa.png");
+	game->dialogue.saveYESb = IMG_Load("DATA/GFX/GUI/yesb.png");
+	game->dialogue.saveNOa = IMG_Load("DATA/GFX/GUI/noa.png");
+	game->dialogue.saveNOb = IMG_Load("DATA/GFX/GUI/nob.png");
+
+    game->dialogue.positionD.x = (game->config.resolution_w-game->dialogue.dialogue->w)/2;
+	game->dialogue.positionD.y = 101;
+	game->dialogue.positionYES.x = 182 + (game->config.resolution_w-game->dialogue.dialogue->w)/2;
+	game->dialogue.positionYES.y = 420;
+	game->dialogue.positionNO.x = 382+(game->config.resolution_w-game->dialogue.dialogue->w)/2;
+	game->dialogue.positionNO.y = 420;
+
+}
+
+int save_level(GAME *game)
+{
+	FILE *fichier = NULL;
+	fichier = fopen("save.bin", "wb");
+	if (fichier == NULL)
+		return 0;
+	else
+    {
+        fwrite(&game->level, sizeof(int), 1, fichier);
+        fclose(fichier);
+    }
+	return 1;
+
+}
+
+int load_level(GAME *game)
+{
+	FILE *fichier = NULL;
+	fichier = fopen("save.bin", "rb");
+	if (fichier == NULL)
+		return 0;
+	else
+    {
+        fread(&game->level, sizeof(int), 1, fichier);
+        fclose(fichier);
+        //loadLevel(game);
+        return 1;
+    }
+
+}
+
+
+
+
+##### ./declarations.h #####
+#ifndef DEC
+#define DEC
+
+typedef int bool;
+#define true 1
+#define false 0
+
+#define PLAT_H 600
+#define PLAT_W game->config.resolution_w
+#define FPS 50
+#define CHAR_H 90//330//160
+#define CHAR_W 90//330//80
+#define CHAR_BIG_H 170//330//160
+#define CHAR_BIG_W 170//330//80
+#define SPEED game->character.speed//12//6
+#define GRAVITY 9
+#define JUMP_POWER 16
+#define maxJmpH 95
+#define RELOAD 1000
+//#define MAX_ITEMS 4
+
+#endif
+
+
+##### ./menu.c #####
+#include "menu.h"
+#include "game.h"
+#include "level.h"
+
+/**
+
+* @file menu.c
+
+* @brief It never ends menu.
+
+* @author C Squad
+
+* @version 1.2
+
+* @date May 23, 2016
+
+*/
+
+void get_out();
+int get_config(GAME *game);
+
+int game_menu(GAME *game)
+{
+    Menu menu;
+
+    int fix=0;
+    Mix_Chunk *son;
+    son = Mix_LoadWAV("DATA/SFX/wood.ogg");
+
+    SDL_Surface *animation[11]= {NULL};
+    SDL_Surface *titre[56];
+    SDL_Surface *boutonsA[5]= {NULL};
+    SDL_Surface *boutonsB[5]= {NULL};
+
+    SDL_Surface *exit_menu[5]= {NULL};
+    SDL_Surface *options_back=NULL;
+    SDL_Surface *options[8]= {NULL};
+
+    SDL_Rect positionfond = {0,0,0,0};
+    SDL_Rect positionsrc = {0,20,1167,700};
+    SDL_Rect positionbouton[5] = {{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0}};
+
+    SDL_Rect positionexit, positionyes, positionno;
+    SDL_Rect positionoptions, positionoption1, positionoption2;
+
+    SDL_Event event;
+    int TITLE_SHOWN=0;
+
+    int i=0, v=0, j=0;
+    char file_name[256]=" ";
+
+    int fix_son=0;
+
+    Mix_Music *musique;
+
+    /* START Music Stuff */
+
+    Mix_AllocateChannels(2);
+    musique = Mix_LoadMUS("DATA/SFX/menu.ogg"); //Chargement de la musique
+
+    Mix_VolumeChunk(son, MIX_MAX_VOLUME/8);
+    Mix_VolumeMusic(MIX_MAX_VOLUME/4);
+    Mix_PlayMusic(musique, -1);
+
+    /* END Music Stuff */
+
+
+    //Variable initialization
+
+    menu.done=0;
+    menu.etat=1;
+    menu.SHOW_OPTION=0;
+    menu.SHOW_EXIT=0;
+    menu.opt1_select=0;
+    menu.opt2_select=0;
+    menu.exit_yes=0;
+    menu.exit_no=0;
+
+    menu.continue_level=0;
+
+
+    positionfond.x = 0+100;
+    positionfond.y = 0;
+    positionbouton[0].x = 495+100;
+    positionbouton[0].y = 376;
+    positionbouton[1].x = 503+100;
+    positionbouton[1].y = 446;
+    positionbouton[2].x = 513+100;
+    positionbouton[2].y = 511;
+    positionbouton[3].x = 546+100;
+    positionbouton[3].y = 576;
+    positionbouton[4].x = 550+100;
+    positionbouton[4].y = 639;
+
+    positionoptions.x = 198+100;
+    positionoptions.y = 101;
+    positionoption1.x = 290+100;
+    positionoption1.y = 226;
+    positionoption2.x = 370+100;
+    positionoption2.y = 317;
+
+
+    positionexit.x = 198+100;
+    positionexit.y = 200;
+    positionyes.x = 432+100;
+    positionyes.y = 420;
+    positionno.x = 634+100;
+    positionno.y = 420;
+
+
+    for (i = 1; i < 10; i++)
+    {
+        snprintf(file_name, sizeof(file_name), "DATA/GFX/menu/animation/a%d.png", i);
+        animation[i] = IMG_Load(file_name);
+    }
+
+
+//Arriere-plan du menu
+    for (i = 1; i < 5; i++)
+    {
+        snprintf(file_name, sizeof(file_name), "DATA/GFX/menu/animation/a%d.png", i);
+        animation[i] = IMG_Load(file_name);
+    }
+
+//titre
+    for (i = 1; i < 55; i++)
+    {
+        snprintf(file_name, sizeof(file_name), "DATA/GFX/menu/titre/b00%d.png", i);
+        titre[i] = IMG_Load(file_name);
+    }
+
+//boutons
+    for (i=1; i<6; i++)
+    {
+        snprintf(file_name, sizeof(file_name), "DATA/GFX/menu/boutons/%da.png", i);
+        boutonsA[i] = IMG_Load(file_name);
+
+        snprintf(file_name, sizeof(file_name), "DATA/GFX/menu/boutons/%db.png", i);
+        boutonsB[i] = IMG_Load(file_name);
+    }
+
+//menu exit
+
+    exit_menu[0]=IMG_Load("DATA/GFX/menu/options/Exit.png");
+    exit_menu[1]=IMG_Load("DATA/GFX/menu/options/yesb.png");
+    exit_menu[2]=IMG_Load("DATA/GFX/menu/options/yesa.png");
+    exit_menu[3]=IMG_Load("DATA/GFX/menu/options/nob.png");
+    exit_menu[4]=IMG_Load("DATA/GFX/menu/options/noa.png");
+
+
+//menu_options
+    options_back = IMG_Load("DATA/GFX/menu/options/Options.png");
+    options[0] = IMG_Load("DATA/GFX/menu/options/OFFb.png");
+    options[1] = IMG_Load("DATA/GFX/menu/options/ONb.png");
+    options[2] = IMG_Load("DATA/GFX/menu/options/OFFa.png");
+    options[3] = IMG_Load("DATA/GFX/menu/options/ONa.png");
+    options[4] = IMG_Load("DATA/GFX/menu/options/MUSICONa.png");
+    options[5] = IMG_Load("DATA/GFX/menu/options/MUSICOFFa.png");
+    options[6] = IMG_Load("DATA/GFX/menu/options/MUSICONb.png");
+    options[7] = IMG_Load("DATA/GFX/menu/options/MUSICOFFb.png");
+
+
+    menu.etat=1;
+
+    i=0;
+    v=0;
+
+    menu.continuer=1;
+    menu.fullscreenfix=1;
+
+    while (menu.continuer)
+    {
+
+        if (menu.opt1_select==1 && !menu.fullscreenfix)
+        {
+            if (get_config(game)==0)
+            {
+                game->screen = SDL_SetVideoMode(game->config.resolution_w, game->config.resolution_h, 32, SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_FULLSCREEN);
+                menu.fullscreenfix=1;
+            }
+        }
+
+        else if (menu.opt1_select==0 && !menu.fullscreenfix)
+        {
+            if (get_config(game)==0)
+            {
+                game->screen = SDL_SetVideoMode(game->config.resolution_w, game->config.resolution_h, 32, SDL_DOUBLEBUF | SDL_HWSURFACE);
+                menu.fullscreenfix=1;
+            }
+
+        }
+
+
+//************************* Affichage du titre **********************
+
+        if (!TITLE_SHOWN)
+        {
+            for(v=1; v<53; v++)
+            {
+                if (i>6)
+                    i=0;
+
+                i++;
+
+                SDL_BlitSurface(animation[i],NULL,game->screen,&positionfond);
+                SDL_BlitSurface(titre[v],NULL,game->screen,&positionfond);
+              //  SDL_Delay(5);
+                SDL_Flip(game->screen);
+                SDL_FreeSurface(titre[v]);
+
+
+            }
+            TITLE_SHOWN=1;
+        }
+
+//********************************************************************
+
+//************************ Animation Background *********************
+
+        if (i>6)
+            i=0;
+
+        i++;
+
+        SDL_BlitSurface(animation[i],&positionsrc,game->screen,&positionfond);
+        if(!menu.SHOW_EXIT)
+        {
+            SDL_BlitSurface(titre[54],NULL,game->screen,&positionfond);
+            for (j=1; j<6; j++)
+                SDL_BlitSurface(boutonsA[j],NULL,game->screen,&positionbouton[j-1]);
+
+            switch(menu.etat)
+            {
+            case 1:
+                SDL_BlitSurface(boutonsB[1],NULL,game->screen,&positionbouton[0]);
+                break;
+            case 2:
+                SDL_BlitSurface(boutonsB[2],NULL,game->screen,&positionbouton[1]);
+                break;
+            case 3:
+                SDL_BlitSurface(boutonsB[3],NULL,game->screen,&positionbouton[2]);
+                break;
+            case 4:
+                SDL_BlitSurface(boutonsB[4],NULL,game->screen,&positionbouton[3]);
+                break;
+            case 5:
+                SDL_BlitSurface(boutonsB[5],NULL,game->screen,&positionbouton[4]);
+                break;
+
+            }
+        }
+
+
+//*******************************************************************
+
+//***************************** menu exit ***************************
+        if (menu.SHOW_EXIT)
+        {
+            SDL_BlitSurface(exit_menu[0],NULL,game->screen,&positionexit);
+            SDL_BlitSurface(exit_menu[1+menu.exit_yes],NULL,game->screen,&positionyes);
+            SDL_BlitSurface(exit_menu[3+menu.exit_no],NULL,game->screen,&positionno);
+
+        }
+
+//*******************************************************************
+
+//**************************** menu options *************************
+        if (menu.SHOW_OPTION)
+        {
+            SDL_BlitSurface(options_back,NULL,game->screen,&positionoptions);
+            SDL_BlitSurface(options[menu.opt1_select],NULL,game->screen,&positionoption1);
+            SDL_BlitSurface(options[menu.opt2_select],NULL,game->screen,&positionoption2);
+
+        }
+
+//*******************************************************************
+
+
+        SDL_Flip(game->screen);
+
+        if (SDL_PollEvent(&event)==1)
+        {
+            if (event.type == SDL_QUIT)
+            {
+                menu.continuer=0;
+            }
+
+            else if (event.type == SDL_KEYUP)
+            {
+                fix=0;
+            }
+
+
+            else  if (event.type == SDL_KEYDOWN)
+            {
+                if(!fix)
+                {
+                    switch(event.key.keysym.sym)
+                    {
+                    case SDLK_DOWN:
+                        if (menu.etat!=5 && !menu.SHOW_OPTION && !menu.SHOW_EXIT)
+                        {
+                            (menu.etat)++;
+                            fix=1;
+                            Mix_PlayChannel(1, son, 0);
+                        }
+                        if (menu.SHOW_OPTION)
+                        {
+                            if (menu.opt2_select==4)
+                                menu.opt2_select=6;
+                            if (menu.opt2_select==5)
+                                menu.opt2_select=7;
+                            if (menu.opt1_select==0)
+                                menu.opt1_select=2;
+                            if (menu.opt1_select==1)
+                                menu.opt1_select=3;
+                            fix=1;
+                        }
+                        break;
+                    case SDLK_UP:
+                        if (menu.etat!=1 && !menu.SHOW_OPTION && !menu.SHOW_EXIT)
+                        {
+                            (menu.etat)--;
+                            fix=1;
+                            Mix_PlayChannel(1, son, 0);
+                        }
+
+                        if (menu.SHOW_OPTION)
+                        {
+                            if (menu.opt1_select==2)
+                                menu.opt1_select=0;
+                            if (menu.opt1_select==3)
+                                menu.opt1_select=1;
+                            if (menu.opt2_select==6)
+                                menu.opt2_select=4;
+                            if (menu.opt2_select==7)
+                                menu.opt2_select=5;
+                            fix=1;
+                        }
+                        break;
+                    case SDLK_RIGHT:
+                        if (menu.SHOW_EXIT)
+                        {
+                            menu.exit_no=1;
+                            menu.exit_yes=0;
+                            fix=1;
+                        }
+
+                        if (menu.SHOW_OPTION)
+                        {
+                            if (menu.opt1_select==0)
+                            {
+                                menu.opt1_select=1;
+                                menu.fullscreenfix=0;
+                            }
+
+                            if (menu.opt2_select==6)
+                            {
+                                menu.opt2_select=7;
+                                Mix_Pause(1);
+                                Mix_PauseMusic();
+                            }
+                            fix=1;
+                        }
+                        break;
+                    case SDLK_LEFT:
+                        if (menu.SHOW_EXIT)
+                        {
+                            menu.exit_no=0;
+                            menu.exit_yes=1;
+                            fix=1;
+                        }
+                        if (menu.SHOW_OPTION)
+                        {
+                            if (menu.opt1_select==1)
+                            {
+                                menu.opt1_select=0;
+                                menu.fullscreenfix=0;
+                            }
+
+                            if (menu.opt2_select==7)
+                            {
+                                menu.opt2_select=6;
+                                Mix_ResumeMusic();
+                            }
+                            fix=1;
+                        }
+                        break;
+
+                    case SDLK_ESCAPE:
+                        menu.SHOW_OPTION=0;
+                        menu.SHOW_EXIT=0;
+                        fix=1;
+                        break;
+
+                    case SDLK_RETURN:
+                        fix=1;
+                        switch(menu.etat)
+                        {
+                        case 1:
+                            game->level=1;
+                            Mix_PauseMusic();
+                            menu.continuer=0;
+                            break;
+
+                        case 2:
+                            load_level(game);
+                            Mix_PauseMusic();
+                            menu.continuer=0;
+                            break;
+
+                        case 3:
+                            if (!menu.SHOW_OPTION)
+                            {
+                                menu.opt1_select=0;
+                                menu.opt2_select=4;
+                            }
+
+                            menu.SHOW_OPTION=1;
+                            fix=1;
+                            break;
+
+                        case 4:
+                            break; //help
+
+                        case 5:
+                            if(!menu.SHOW_EXIT)
+                            {
+                                menu.exit_yes=1;
+                                menu.exit_no=0;
+                            }
+                            if (menu.SHOW_EXIT)
+                            {
+                                if (menu.exit_yes)
+                                {
+                                    menu.continuer=0;
+                                }
+                                else
+                                    menu.SHOW_EXIT=0;
+                            }
+                            if(menu.exit_no==0)
+                                menu.SHOW_EXIT=1;
+                            break;
+
+                        default:
+                            break;
+                        }
+                    default:
+                        break;
+                    }
+
+
+                }
+            }
+
+            else if (event.type == SDL_KEYUP)
+            {
+                fix=0;
+            }
+
+            else if (event.type == SDL_MOUSEBUTTONDOWN && event.motion.y > 370 && event.motion.y < 690)
+            {
+                fix=1;
+                switch(menu.etat)
+                {
+                case 1:
+                    game->level=1;
+                    Mix_PauseMusic();
+                    menu.continuer=0;
+                    break;
+
+                case 2:
+                    load_level(game);
+                    Mix_PauseMusic();
+                    menu.continuer=0;
+                    break;
+
+                case 3:
+                    if (!menu.SHOW_OPTION)
+                    {
+                        menu.opt1_select=0;
+                        menu.opt2_select=4;
+                    }
+
+                    menu.SHOW_OPTION=1;
+                    fix=1;
+                    break;
+
+                case 4:
+                    break; //help
+
+                case 5:
+                    if(!menu.SHOW_EXIT)
+                    {
+                        menu.exit_yes=1;
+                        menu.exit_no=0;
+                    }
+                    if (menu.SHOW_EXIT)
+                    {
+                        if (menu.exit_yes)
+                        {
+                            menu.continuer=0;
+                        }
+                        else
+                            menu.SHOW_EXIT=0;
+                    }
+                    if(menu.exit_no==0)
+                        menu.SHOW_EXIT=1;
+
+
+                    break;
+
+                default:
+                    break;
+                }
+
+
+            }
+
+            if (event.type == SDL_MOUSEMOTION && !menu.SHOW_OPTION && !menu.SHOW_EXIT)
+            {
+                if ((event.motion.y >= 376) && (event.motion.y <= 428))
+                {
+                    if(!fix_son)
+                        Mix_PlayChannel(1, son, 0);
+                    menu.etat = 1;
+                    fix_son=1;
+                }
+
+                else if ((event.motion.y >= 439) && (event.motion.y <= 492))
+                {
+                    if(!fix_son)
+                        Mix_PlayChannel(1, son, 0);
+                    menu.etat = 2;
+                    fix_son=1;
+                }
+
+                else if ((event.motion.y >= 511) && (event.motion.y <= 566))
+                {
+                    if(!fix_son)
+                        Mix_PlayChannel(1, son, 0);
+                    menu.etat = 3;
+                    fix_son=1;
+                }
+
+                else if ((event.motion.y >= 576) && (event.motion.y <= 630))
+                {
+                    if(!fix_son)
+                        Mix_PlayChannel(1, son, 0);
+                    menu.etat = 4;
+                    fix_son=1;
+                }
+
+                else if ((event.motion.y >= 640) && (event.motion.y <= 685))
+                {
+                    if(!fix_son)
+                        Mix_PlayChannel(1, son, 0);
+                    menu.etat = 5;
+                    fix_son=1;
+                }
+
+                else
+                    fix_son=0;
+
+            }
+
+            /* else if (event.type==SDL_QUIT)
+             {
+                 menu.continuer=0;
+             }*/
+        }
+    }
+
+
+
+    for (i = 1; i < 10; i++)
+    {
+        SDL_FreeSurface(animation[i]);
+    }
+    for (i=1; i<6; i++)
+    {
+        SDL_FreeSurface(boutonsA[i]);
+        SDL_FreeSurface(boutonsB[i]);
+    }
+
+    SDL_FreeSurface(options_back);
+    for (i = 0; i < 8; i++)
+    {
+        SDL_FreeSurface(options[i]);
+    }
+    Mix_PauseMusic();
+    Mix_FreeMusic(musique);
+
+    menu.done=1;
+
+    if (menu.etat==5)
+        return -1;
+
+    return 0;
+}
+
+
+##### ./enemy.c #####
+/**
+
+* @file enemy.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+
+#include <math.h>
+#include "game.h"
+#include "functions.h"
+
+unsigned int src_pos=1;
+
+int inrange(GAME *game, int i)
+{
+    return (sqrt(pow(game->npc[i].position.x-(game->background.scroll_x+game->character.position.x),2))<game->npc[i].vision_range && (game->character.position.y >= game->npc[i].position.y - CHAR_H && game->character.position.y <= game->npc[i].position.y + CHAR_H));
+}
+
+int spotted(GAME *game, int i)
+{
+    return ((game->character.position.x+game->background.scroll_x < game->npc[i].position.x && game->npc[i].direction == -1) || (game->character.position.x+game->background.scroll_x > game->npc[i].position.x && game->npc[i].direction == 1) ) ;
+}
+
+void movement_npc(GAME *game, int n)
+{
+
+        if (game->npc[n].behavior==PATROL || game->npc[n].behavior==REFRACT)
+        {
+            if (!game->npc[n].fix)
+            {
+                game->npc[n].elapsed=SDL_GetTicks();
+                game->npc[n].fix=1;
+            }
+
+
+            game->npc[n].position.x+=game->npc[n].speed*game->npc[n].direction;
+
+            if (SDL_TICKS_PASSED(game->npc[n].elapsed, 5000))
+            {
+                game->npc[n].direction*=(-1);
+                game->npc[n].fix=0;
+            }
+
+            if (game->npc[n].direction==1)
+                game->npc[n].look=0;
+
+            else
+                game->npc[n].look=1;
+
+            game->npc[n].actuel++;
+            if (game->npc[n].actuel>4)
+                game->npc[n].actuel=0;
+        }
+
+        else if (game->npc[n].behavior==ATTACK)
+        {
+            if (game->npc[0].direction==1)
+            {
+                game->npc[0].look=2;
+                game->npc[0].actuel=0;
+            }
+            else
+            {
+                game->npc[0].look=2;
+                game->npc[0].actuel=1;
+            }
+
+		bullet_shot(game, n);
+
+        }
+
+
+
+        if (inrange(game,n))
+        {
+            if (spotted(game,n))
+                {
+                    if (game->global.get_elapsed_npc[n])
+                    {
+                        game->global.get_elapsed_npc[n]=0;
+                        game->global.elapsed_npc[n] = SDL_GetTicks();
+                    }
+                    else
+                    {
+                        if (SDL_TICKS_PASSED(game->global.elapsed_npc[n], 600))
+                            game->npc[n].behavior=ATTACK;
+                        else
+                            game->npc[n].behavior=REFRACT;
+                    }
+
+                }
+
+        }
+        else
+        {
+            game->npc[n].behavior=PATROL;
+            game->global.get_elapsed_npc[n]=1;
+        }
+
+
+
+
+}
+
+
+
+
+##### ./level.h #####
+#ifndef LEVEL_H_INCLUDED
+#define LEVEL_H_INCLUDED
+
+#include "game.h"
+
+void level1(GAME *game);
+void level2(GAME *game);
+void level3(GAME *game);
+void level4(GAME *game);
+void playLevel(GAME *game);
+void update_screen(GAME *game);
+void getPositions(GAME *game);
+void mouvement_level4(GAME *game);
+void teleport_next_door(GAME *game);
+void movement(GAME *game);
+void movement_npc(GAME *game, int n);
+int onTexte(GAME *game);
+int collision_cercle(Cercle c1, Cercle c2);
+void save_level(GAME *game);
+void play_music(Music *musique);
+void saving_menu(GAME *game, Dialogue dialogue);
+int manage_events(GAME *game, SDL_Event *event);
+void movement_level3(GAME *game);  // Changed from struct Game* to GAME*
+int collision_fall(GAME *game);    // Changed from struct Game* to GAME*
+int onGround(GAME *game, Character character);  // Add this declaration
+int collision_pente(GAME *game);
+void load_level(GAME *game);
+
+#endif // LEVEL_H_INCLUDED
+
+
+##### ./items.h #####
+#ifndef ITEMS_H
+#define ITEMS_H
+#include "collision.h"
+#define MAX_ITEMS 10  // Keep this as the only definition
+typedef struct Item
+{
+int number;
+SDL_Surface *image, *description;
+SDL_Rect position, blit_pos;
+Cercle cercle;
+int have, selected, disposable;
+}Item;
+
+typedef struct Inventory
+{
+int count;
+Item item[MAX_ITEMS];
+
+}Inventory;
+
+#endif
+
+
+##### ./character.h #####
+#ifndef CHARACTER_H
+#define CHARACTER_H
+
+
+
+#define CHAR_H_INCLUDED
+#include "game.h" // Include game.h FIRST to define GAME
+#include "collision.h"
+#include "enum.h"
+
+
+typedef struct Character
+{
+    SDL_Surface *image;
+    SDL_Rect position, src_pos, relativePos;
+    Cercle pos_cercle;
+    int look, actuel;
+    int life, died;
+    int elapsed;
+    /* Npc vars */
+    int vision_range, direction, speed, fix;
+    Behavior behavior;
+}Character;
+
+#endif // CHAR_H_INCLUDED
+
+
+##### ./enum.h #####
+#ifndef ENUM_H_INCLUDED
+#define ENUM_H_INCLUDED
+
+typedef enum Behavior
+{
+PATROL, FOLLOW, ATTACK, REFRACT
+}Behavior;
+
+typedef enum Color
+{
+NONE, BLUE, RED, GREEN, YELLOW
+}Color;
+
+#endif // ENUM_H_INCLUDED
+
+
+##### ./display.c #####
+/**
+
+* @file display.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+
+#include <SDL/SDL.h>
+#include <SDL/SDL_image.h>
+#include <SDL/SDL_ttf.h>
+#include "game.h"
+#include "functions.h"
+#include "display.h"
+
+int fix_wasted=0;
+void BlitWasted(GAME *game, SDL_Rect pos_screen);
+
+void update_screen(GAME *game)
+{
+    unsigned int elapsed;
+    unsigned int lasttime = SDL_GetTicks();
+    int i=0;
+    SDL_Rect pos_screen;
+
+    pos_screen.x=0;
+    pos_screen.y=(game->config.resolution_h-game->background.image[0]->h)/2;
+
+    game->background.position.x=game->background.scroll_x;
+    game->background.position.y=game->background.scroll_y;
+    game->background.position.h=PLAT_H;
+    game->background.position.w=PLAT_W;
+
+    game->objects.objective.pos_src.w=62;
+    game->objects.objective.pos_src.h=90;
+    game->objects.objective.pos_src.x=game->global.obj_i*62;
+    game->objects.objective.pos_src.y=0;
+
+    if (game->level==1)
+    {
+        game->character.src_pos.x=CHAR_W*game->character.actuel;
+        game->character.src_pos.y=CHAR_H*game->character.look;
+        game->character.src_pos.h=CHAR_H;
+        game->character.src_pos.w=CHAR_W;
+    }
+    else
+    {
+        game->character.src_pos.x=CHAR_BIG_W*game->character.actuel;
+        game->character.src_pos.y=CHAR_BIG_H*game->character.look;
+        game->character.src_pos.h=CHAR_BIG_H;
+        game->character.src_pos.w=CHAR_BIG_W;
+    }
+
+    i=(game->background.counter%3)+2;
+
+    if (/*!game->character.died && */game->background.image[0]!=NULL)
+    {
+        SDL_FillRect(game->screen, NULL, SDL_MapRGB(game->screen->format, 0, 0, 0));
+        switch (game->level)
+        {
+        case 1:
+            if (random_case(game))
+                SDL_BlitSurface(game->background.image[1],&game->background.position,game->screen,&pos_screen);
+            else
+                SDL_BlitSurface(game->background.image[0],&game->background.position,game->screen,&pos_screen);
+
+            break;
+        case 2:
+            if (game->background.counter%10)
+                SDL_BlitSurface(game->background.image[1],&game->background.position,game->screen,&pos_screen);
+            else
+                SDL_BlitSurface(game->background.image[0],&game->background.position,game->screen,&pos_screen);
+            if (game->global.level2_show_items)
+                SDL_BlitSurface(game->background.image[2],&game->background.position,game->screen,&pos_screen);
+
+            if (game->global.level2_show_items)
+            {
+                if (game->objects.inventory.item[2].have==0)
+                    SDL_BlitSurface(game->objects.inventory.item[2].image,NULL,game->screen,&game->objects.inventory.item[2].blit_pos);
+                if (game->objects.inventory.item[3].have==0)
+                    SDL_BlitSurface(game->objects.inventory.item[3].image,NULL,game->screen,&game->objects.inventory.item[3].blit_pos);
+            }
+            break;
+        case 3:
+            SDL_BlitSurface(game->background.image[i%2],&game->background.position,game->screen,&pos_screen);
+            if (game->objects.inventory.item[1].have==0)
+                SDL_BlitSurface(game->objects.inventory.item[1].image,NULL,game->screen,&game->objects.inventory.item[1].blit_pos);
+
+            break;
+        case 4:
+//       SDL_FillRect(game->screen, NULL, SDL_MapRGB(game->screen->format, 0, 0, 0));
+            SDL_BlitSurface(game->background.image[0],&game->background.position,game->screen,&pos_screen);
+            break;
+
+        }
+
+
+        game->global.obj_i++;
+        if (game->global.obj_i>7)
+            game->global.obj_i=0;
+
+        game->objects.objective.pos_src.x=game->global.obj_i*62;
+        game->objects.objective.pos_src.y=0;
+
+        if (game->objects.objective.image!=NULL)
+            if (PLAT_W+game->background.scroll_x>=game->objects.objective.position.x)
+            {
+                SDL_BlitSurface(game->objects.objective.image,&game->objects.objective.pos_src,game->screen,&game->objects.objective.relativePos);
+            }
+
+
+        /* --- */
+        BlitNPC(game);
+        SDL_BlitSurface(game->character.image,&game->character.src_pos,game->screen,&game->character.position);
+
+        if (game->level==1)
+            SDL_BlitSurface(game->background.image[i],&game->background.pos_rain,game->screen,&pos_screen);
+        if (game->level==4)
+        {
+            game->global.fire_i++;
+            if (game->global.fire_i>3)
+                game->global.fire_i=0;
+
+            if (!game->global.FIN)
+                SDL_BlitSurface(game->background.image[game->global.fire_i+2],NULL,game->screen,&pos_screen);
+
+        }
+
+        SDL_BlitSurface(game->gui.avatar,NULL,game->screen,&game->gui.pos_avatar);
+        game->gui.hp = TTF_RenderText_Solid(game->texte.police, tostr(game->character.life), game->texte.couleur);
+        SDL_BlitSurface(game->gui.hp, NULL, game->screen, &game->gui.pos_hp);
+
+        /* inventaire */
+        if (game->gui.show_inv)
+        {
+            show_inventory(game);
+        }
+
+
+        /* Dialogue */
+        if (game->gui.show_dialogue)
+        {
+            SDL_BlitSurface(game->gui.dialogue[game->texte.indice[game->texte.i]], NULL, game->screen, &game->gui.pos_dialogue);
+            SDL_BlitSurface(game->gui.btn_animated[i%2], NULL, game->screen, &game->gui.pos_btn);
+            blit_text(game);
+        }
+
+        /* Shooting */
+        blit_bullet(game);
+
+        /* Text */
+        if (game->global.show_message)
+            show_message(game);
+
+
+        /* */
+
+        if (game->character.life<=0)// && game->texte.quote!=NULL)
+            SDL_BlitSurface(game->texte.quote, NULL, game->screen, NULL);
+
+        if (game->character.died)
+        {
+            if (!game->global.fix_died)
+            {
+                game->global.frame_died++;
+                if (game->global.frame_died==32)
+                    game->global.fix_died=1;
+                SDL_Delay(game->global.frame_died);
+                pos_screen.x+=100;
+                SDL_BlitSurface(game->gui.died[game->global.frame_died], NULL, game->screen, &pos_screen);
+                pos_screen.x-=100;
+            }
+            else
+            {
+                pos_screen.x+=100;
+                SDL_BlitSurface(game->gui.died[32], NULL, game->screen, &pos_screen);
+                game->global.frame_died=0;
+                pos_screen.x-=100;
+            }
+        }
+        //fix_wasted=0;
+    }
+
+    /*else
+    {
+
+    }*/
+
+
+    /* Fixing fps */
+    elapsed = SDL_GetTicks()-lasttime;
+    if (elapsed<1000/FPS)
+        SDL_Delay(1000/FPS-elapsed);
+
+    SDL_Flip(game->screen);
+}
+
+void BlitNPC(GAME *game)
+{
+    SDL_Rect src_npc[5]; //relativePos_npc takes the position relative to camera from actual position
+
+
+    src_npc[0].x=CHAR_W*game->npc[0].actuel;
+    src_npc[0].y=CHAR_H*game->npc[0].look;
+    src_npc[0].h=CHAR_H;
+    src_npc[0].w=CHAR_W;
+
+    src_npc[1].x=CHAR_W*game->npc[1].actuel;
+    src_npc[1].y=CHAR_H*game->npc[1].look;
+    src_npc[1].h=CHAR_H;
+    src_npc[1].w=CHAR_W;
+
+    src_npc[2].x=CHAR_W*game->npc[2].actuel;
+    src_npc[2].y=CHAR_H*game->npc[2].look;
+    src_npc[2].h=CHAR_H;
+    src_npc[2].w=CHAR_W;
+
+    src_npc[3].x=CHAR_W*game->npc[3].actuel;
+    src_npc[3].y=CHAR_H*game->npc[3].look;
+    src_npc[3].h=CHAR_H;
+    src_npc[3].w=CHAR_W;
+
+    if (game->npc[4].image!=NULL)
+    {
+        src_npc[4].x=0;//85*game->npc[4].actuel;
+        src_npc[4].y=150;//150*game->npc[4].look;
+        src_npc[4].h=150;
+        src_npc[4].w=78;
+    }
+
+
+    if (game->npc[0].image!=NULL)
+        if (PLAT_W+game->background.scroll_x>=game->npc[0].position.x)
+        {
+            SDL_BlitSurface(game->npc[0].image,&src_npc[0],game->screen,&game->npc[0].relativePos);
+        }
+    if (game->npc[1].image!=NULL)
+        if (PLAT_W+game->background.scroll_x>=game->npc[1].position.x)
+        {
+            SDL_BlitSurface(game->npc[1].image,&src_npc[1],game->screen,&game->npc[1].relativePos);
+        }
+
+    if (game->npc[2].image!=NULL)
+        if (PLAT_W+game->background.scroll_x>=game->npc[2].position.x)
+        {
+            SDL_BlitSurface(game->npc[2].image,&src_npc[2],game->screen,&game->npc[2].relativePos);
+        }
+    if (game->npc[3].image!=NULL)
+        if (PLAT_W+game->background.scroll_x>=game->npc[3].position.x)
+        {
+            SDL_BlitSurface(game->npc[3].image,&src_npc[3],game->screen,&game->npc[3].relativePos);
+        }
+
+    if (game->npc[4].image!=NULL)
+    {
+        if (PLAT_W+game->background.scroll_x>=game->npc[4].position.x)
+        {
+            SDL_BlitSurface(game->npc[4].image, &src_npc[4],game->screen, &game->npc[4].relativePos);
+        }
+
+    }
+
+}
+
+void getPositions(GAME *game)
+{
+    int i=0;
+    for (i=0; i<5; i++)
+        if (game->npc[i].image!=NULL)
+        {
+            game->npc[i].relativePos.x=relative_x(game,game->npc[i].position);
+            game->npc[i].relativePos.y=game->npc[i].position.y;
+        }
+
+    for (i=0; i<5; i++)
+        //if (game->objects.bullet[i].started)
+    {
+        game->objects.bullet[i].relativePos.x=relative_x(game, game->objects.bullet[i].position);
+        game->objects.bullet[i].relativePos.y=game->objects.bullet[i].position.y;
+    }
+    game->objects.objective.relativePos.x=relative_x(game, game->objects.objective.position);
+    game->objects.objective.relativePos.y=game->objects.objective.position.y;
+
+    game->objects.inventory.item[1].blit_pos.x=game->objects.inventory.item[1].cercle.x;
+    game->objects.inventory.item[1].blit_pos.y=game->objects.inventory.item[1].cercle.y;
+    game->objects.inventory.item[1].blit_pos.x=relative_x(game, game->objects.inventory.item[1].blit_pos);
+    game->objects.inventory.item[2].blit_pos.x=game->objects.inventory.item[2].cercle.x;
+    game->objects.inventory.item[2].blit_pos.y=game->objects.inventory.item[2].cercle.y;
+    game->objects.inventory.item[2].blit_pos.x=relative_x(game, game->objects.inventory.item[2].blit_pos);
+    game->objects.inventory.item[3].blit_pos.x=game->objects.inventory.item[3].cercle.x;
+    game->objects.inventory.item[3].blit_pos.y=game->objects.inventory.item[3].cercle.y;
+    game->objects.inventory.item[3].blit_pos.x=relative_x(game, game->objects.inventory.item[3].blit_pos);
+}
+
+void show_message(GAME *game)
+{
+    game->texte.texte = TTF_RenderText_Solid(game->texte.police, game->texte.message, game->texte.couleur);
+    SDL_BlitSurface(game->texte.texte, NULL, game->screen, &game->texte.position);
+}
+
+
+void BlitWasted(GAME *game, SDL_Rect pos_screen)
+{
+    int i=0;
+    for (i=1; i<32; i++)
+    {
+        SDL_BlitSurface(game->gui.died[i], NULL, game->screen, &pos_screen);
+        SDL_Flip(game->screen);
+        SDL_Delay(40);
+    }
+}
+
+
+##### ./collisions.c #####
+/**
+
+* @file collisions.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+#include <math.h>
+#include "game.h"
+#include "collision.h"
+
+int collision_cercle(Cercle c1, Cercle c2)
+{
+    return(sqrt(pow((c1.x-c2.x),2)+pow((c1.y-c2.y),2)) <= (c1.r+c2.r));
+}
+
+
+int collision_box(Box b1, Box b2)
+{
+    return(b1.x > b2.x-8 && b1.x < b2.x+8);
+}
+
+//Lire les couleurs d'un pixel
+SDL_Color GetPixel(SDL_Surface *Background, int x, int y)
+{
+    SDL_Color color, black={255,255,255};
+    Uint32 col = 0;
+    //Determine position
+
+if (x<10000 && y<600)
+{
+    char *pixelPosition = (char*)Background->pixels;
+    //Offset by Y
+    pixelPosition += (Background->pitch * y);
+    //Offset by X
+    pixelPosition += (Background->format->BytesPerPixel * x);
+    //Copy pixel data
+    memcpy(&col, pixelPosition, Background->format->BytesPerPixel);
+    //Convert to color
+    SDL_GetRGB(col, Background->format, &color.r, &color.g, &color.b);
+
+    return (color);
+}
+else
+    return (black);
+
+}
+
+int Collision_PPP(struct GAME *game, Character perso)
+{
+    SDL_Color PixelToCompare;
+
+SDL_LockSurface(game->background.levelCollision);
+    if (game->input.left)
+    {
+        if (game->character.position.x + game->background.scroll_x + game->character.position.w*3/4 > 0)
+        PixelToCompare = GetPixel(game->background.levelCollision, game->character.position.x + game->background.scroll_x+game->character.position.w/4, game->character.position.y+game->character.position.h-(game->config.resolution_h-game->background.levelCollision->h)/2-12);
+
+        return ((PixelToCompare.r == 255) && (PixelToCompare.b == 255) && (PixelToCompare.g == 255));
+    }
+
+    if (game->input.right)
+    {
+        if (game->character.position.x + game->background.scroll_x + game->character.position.w*3/4 < game->background.levelCollision->w)
+        PixelToCompare = GetPixel(game->background.levelCollision, game->character.position.x + game->background.scroll_x + game->character.position.w*3/4, game->character.position.y+game->character.position.h-(game->config.resolution_h-game->background.levelCollision->h)/2-12);
+
+        return ((PixelToCompare.r == 255) && (PixelToCompare.b == 255) && (PixelToCompare.g == 255));
+    }
+SDL_UnlockSurface(game->background.levelCollision);
+    return 0;
+}
+
+int onGround(struct GAME *game, Character perso)
+{
+    SDL_Color PixelToCompare;
+    PixelToCompare = GetPixel(game->background.levelCollision /*Background*/, game->character.position.x + game->background.scroll_x + game->character.position.w / 2, game->character.position.y+game->character.position.h-(game->config.resolution_h-game->background.levelCollision->h)/2);
+    return ((PixelToCompare.r == 255) && (PixelToCompare.b == 255) && (PixelToCompare.g == 255));
+}
+/*
+int onGround(GAME *game, Character perso)
+{
+    SDL_Color PixelToCompare;
+    PixelToCompare = GetPixel(game->background.levelCollision , game->character.position.x + game->background.scroll_x + game->character.position.w / 2, game->character.position.y+game->character.position.h-(game->config.resolution_h-PLAT_H)/2);
+    return ((PixelToCompare.r == 255) && (PixelToCompare.b == 255) && (PixelToCompare.g == 255));
+}*/
+
+int onTexte(GAME *game)
+{
+    SDL_Color PixelToCompare;
+    PixelToCompare = GetPixel(game->background.levelCollision, game->character.position.x + game->background.scroll_x + game->character.position.w / 2, game->character.position.y+game->character.position.h/2-(game->config.resolution_h-game->background.levelCollision->h)/2);
+
+    if ((PixelToCompare.b == 0) && (PixelToCompare.g == 0) && (PixelToCompare.r%50==0))
+        return (PixelToCompare.r / 50);
+    else
+        return 0;
+}
+
+
+int collision_pente(struct GAME *game)
+{
+/* Given actual position x1 checks if f(x2)=ax2 is a white pixel, if so then we have a slope */
+/* for x1=0 and x2=10 f(x2)=4 */
+
+    SDL_Color PixelToCompare;
+    PixelToCompare = GetPixel(game->background.levelCollision, game->character.position.x +10+ game->background.scroll_x + game->character.position.w / 2, game->character.position.y+GRAVITY-4+game->character.position.h-(game->config.resolution_h-game->background.levelCollision->h)/2);
+
+    return ((PixelToCompare.r == 255) && (PixelToCompare.b == 255) && (PixelToCompare.g == 255));
+}
+
+
+int collision_fall(struct GAME *game)
+{
+    SDL_Color PixelToCompare;
+    PixelToCompare = GetPixel(game->background.levelCollision, game->character.position.x + game->background.scroll_x + game->character.position.w / 2, game->character.position.y+game->character.position.h-(game->config.resolution_h-game->background.levelCollision->h)/2);
+    return ((PixelToCompare.r == 255) && (PixelToCompare.b == 0) && (PixelToCompare.g == 0));
+}
+
+Color collision_color(GAME *game)
+{
+    SDL_Color PixelToCompare;
+    PixelToCompare = GetPixel(game->background.levelCollision, game->character.position.x + game->background.scroll_x + game->character.position.w / 2, game->character.position.y+game->character.position.h/2-(game->config.resolution_h-game->background.levelCollision->h)/2);
+    if ((PixelToCompare.r == 255) && (PixelToCompare.b == 0) && (PixelToCompare.g == 0))
+        return RED;
+    else if ((PixelToCompare.r == 0) && (PixelToCompare.b == 255) && (PixelToCompare.g == 0))
+        return BLUE;
+    else if ((PixelToCompare.r == 0) && (PixelToCompare.b == 0) && (PixelToCompare.g == 255))
+        return GREEN;
+    else if ((PixelToCompare.r == 255) && (PixelToCompare.b == 0) && (PixelToCompare.g == 255))
+        return YELLOW;
+    else
+        return NONE;
+}
+
+
+##### ./menu.h #####
+#ifndef MENU_H_INCLUDED
+#define MENU_H_INCLUDED
+
+typedef struct Menu
+{
+	int etat;
+	int done, getInput;
+	int continuer;
+	int opt1_select, opt2_select;
+	int SHOW_EXIT, SHOW_OPTION;
+	int exit_yes, exit_no;
+	int intro;
+    int continue_level;
+    int fullscreenfix;
+
+}Menu;
+
+
+#endif // MENU_H_INCLUDED
+
+
+##### ./game.h #####
+#ifndef GAME_H
+#define GAME_H
+
+#include <SDL/SDL.h>
+#include <SDL/SDL_image.h>
+#include <SDL/SDL_ttf.h>
+#include <SDL/SDL_mixer.h>
+#include <SDL/SDL_thread.h>
+#include <SDL/SDL_types.h>
+
+#include "declarations.h"
+#include "character.h"
+#include "objects.h"
+
+
+#define START_Y (game->config.resolution_h-game->background.image[0]->h)/2
+#define TRUE_X (game->background.scroll_x+game->character.position.x)
+#define MAX_ITEMS 10  // Adjust based on your needs
+
+typedef struct Config
+{
+	FILE *f;
+	int resolution_w, resolution_h;
+	int fullscreen;
+}Config;
+
+
+typedef struct Music
+{
+	Mix_Music *ambient;
+
+}Music;
+
+
+typedef struct Background
+{
+    SDL_Surface *image[7];
+    SDL_Surface *levelCollision;
+    SDL_Rect position, pos_rain;
+    int scroll_x;
+    int scroll_y;
+    int counter;
+}Background;
+
+typedef struct Input
+{
+	int left, right, up, down, enter, fix;
+    int startJump, jumpHeight;
+
+}Input;
+
+
+typedef struct GUI
+{
+    SDL_Surface *avatar, *hp, *inventaire, *died[33];
+    SDL_Surface *dialogue[5], *btn_animated[2];
+    SDL_Rect pos_dialogue, pos_btn;
+    SDL_Rect pos_avatar, pos_hp, pos_inv;
+	SDL_Surface *frame;
+
+    int show_dialogue, show_inv, indice;
+}GUI;
+
+typedef struct Global
+{
+    int elapsed_npc[5], get_elapsed_npc[5];
+    int obj_i, EOL; //EOL = end of level
+    int fix, animate;
+    int show_message;
+    int movement;
+    int on_door;
+    int FIN;
+    int fire_i;
+	int fix_died, frame_died;
+	int level2_show_items;
+    int stopDisplay;
+    int green_item, blue_item;
+    int checkpoint;
+    int fix_tutorial;
+    int on_tutorial;
+}Global;
+
+typedef struct GAME
+{
+	SDL_Surface *screen;
+	Background background;
+	Input input, arduino;
+	Character character, npc[5];
+	Texte texte;
+	Objects objects;
+    	GUI gui;
+    	Music musique;
+    	Global global;
+    	Config config;
+    	Dialogue dialogue;
+
+	int level, showMenu;
+    	int sprite;
+
+}GAME;
+
+#include "collision.h"
+
+#endif
+
+
+##### ./arduinoReadWrite.c #####
+#include <termios.h>  // For serial port configuration
+#include <fcntl.h>    // For file control (opening serial ports)
+#include <unistd.h>   // For POSIX system calls like read/write
+#include <stdio.h>    // For standard I/O (printf, perror)
+
+/**
+ * @file ArduinoReadWrite.c
+ * @author C Squad
+ * @brief Serial communication
+ * @version 1.0
+ * @date May 24, 2016
+ */
+
+int openSerial(int *fd) {
+    *fd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_NDELAY);
+    if (*fd < 0) {
+        perror("Error opening serial port");
+        return 0;
+    }
+
+    struct termios tty;
+    if (tcgetattr(*fd, &tty) < 0) {
+        perror("Error getting serial port attributes");
+        close(*fd);
+        return 0;
+    }
+
+    // Configure serial port settings
+    cfsetospeed(&tty, B9600);  // Baud rate 9600
+    cfsetispeed(&tty, B9600);
+
+    tty.c_cflag &= ~PARENB;    // No parity
+    tty.c_cflag &= ~CSTOPB;    // 1 stop bit
+    tty.c_cflag &= ~CSIZE;     // Clear data size
+    tty.c_cflag |= CS8;        // 8 bits
+    tty.c_cflag |= CREAD | CLOCAL;  // Enable receiver, ignore modem control lines
+
+    // Apply settings
+    if (tcsetattr(*fd, TCSANOW, &tty) < 0) {
+        perror("Error setting serial port attributes");
+        close(*fd);
+        return 0;
+    }
+
+    return 1;
+}
+
+int arduinoWrite(int *fd) {
+    char lpBuffer = 'A';
+    ssize_t bytesWritten = write(*fd, &lpBuffer, sizeof(lpBuffer));
+    if (bytesWritten < 0) {
+        perror("Error writing to serial port");
+        close(*fd);
+        return 0;
+    }
+    return 1;  // Success
+}
+
+
+##### ./objects.h #####
+#ifndef OBJECTS_H
+#define OBJECTS_H
+#include "items.h"
+#include "bullet.h"
+
+typedef struct Dialogue
+{
+	int interrupt ;
+	int saving_state;
+	int choice;
+	SDL_Surface *choicy;
+	SDL_Surface *dialogue;
+	SDL_Surface *btnYes;
+	SDL_Surface *btnNo;
+	SDL_Surface *saveYESa;
+	SDL_Surface *saveYESb;
+	SDL_Surface *saveNOa;
+	SDL_Surface *saveNOb;
+
+	SDL_Rect positionChoice;
+	SDL_Rect positionD;
+	SDL_Rect positionYES;
+	SDL_Rect positionNO;
+}Dialogue;
+
+typedef struct Texte
+{
+SDL_Surface *texte;
+SDL_Rect position;
+TTF_Font *police;
+SDL_Color couleur;
+FILE *f;
+int actuel,i,fix,line, indice[26];
+
+char ch[6], aux[100], dialogue[26][100];
+char message[100];
+
+char text_quote[60];
+SDL_Surface *quote;
+SDL_Rect pos_quote;
+
+}Texte;
+
+typedef struct Particle
+{
+    SDL_Surface *image;
+	SDL_Rect pos_src, position, relativePos;
+	Cercle cercle;
+}Particle;
+
+typedef struct Borders
+{
+    int left[6], right[6];
+}Borders;
+
+typedef struct Objects
+{
+	Bullet bullet[5];
+	unsigned int elapsed;
+
+    Particle objective;
+    Borders borders;
+    Cercle door[12];
+	Inventory inventory;
+	SDL_Surface *tutorial[10];
+	SDL_Rect pos_tuto;
+
+}Objects;
+
+
+#endif
+
+
+##### ./bullet.c #####
+/**
+
+* @file bullet.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+#include <math.h>
+#include <string.h>
+#include "game.h"
+#include "functions.h"
+
+#define BULLET_TICKS 4000
+
+int collision_cercle(Cercle c1, Cercle c2);
+
+int get_elapsed=1;
+
+void init_bullet(GAME *game, int a, int b) /* a: npc id     b: bullet id */
+{
+    if (game->character.position.x+game->background.scroll_x<game->npc[a].position.x)
+    {
+        game->objects.bullet[b].direction=-1;
+        game->objects.bullet[b].position.x=game->npc[a].position.x;
+        game->objects.bullet[b].position.y=game->npc[a].position.y+15;
+    }
+    else
+    {
+        game->objects.bullet[b].direction=1;
+        game->objects.bullet[b].position.x=game->npc[a].position.x+20;
+        game->objects.bullet[b].position.y=game->npc[a].position.y+15;
+
+    }
+}
+
+void blit_bullet(GAME *game)
+{
+    int i=0;
+
+    SDL_Rect src_bullet;
+    src_bullet.x=0;
+    src_bullet.y=0;
+    src_bullet.h=12;
+    src_bullet.w=20;
+
+    for (i=0; i<5; i++)
+    {
+        if (SDL_TICKS_PASSED(game->objects.bullet[i].ticks, BULLET_TICKS))
+            game->objects.bullet[i].started=0;
+
+        if (game->objects.bullet[i].started)
+        {
+            game->objects.bullet[i].position.x+=game->objects.bullet[i].direction*game->objects.bullet[i].speed;
+            game->objects.bullet[i].cercle.x=game->objects.bullet[i].position.x;
+            game->objects.bullet[i].cercle.y=game->objects.bullet[i].position.y;
+
+
+            SDL_BlitSurface(game->objects.bullet[i].image, &src_bullet, game->screen, &game->objects.bullet[i].relativePos);
+
+
+            /* collision start */
+            if (!game->character.died)
+                if (collision_cercle(game->character.pos_cercle,game->objects.bullet[i].cercle))
+                {
+                    game->character.died=1;
+                    game->character.life--;
+                    game->objects.bullet[i].started=0;
+                }
+            /* collision end */
+        }
+    }
+
+}
+
+
+void bullet_shot(GAME *game, int a)  /* a: npc id */
+{
+    int i=0;
+
+    if (get_elapsed)
+    {
+        game->objects.elapsed=SDL_GetTicks();
+        get_elapsed=0;
+
+
+        while (i<5)
+        {
+            if (!game->objects.bullet[i].started)
+            {
+                init_bullet(game,a,i);
+                game->objects.bullet[i].ticks=SDL_GetTicks();
+                game->objects.bullet[i].started=1;
+
+                if (SDL_TICKS_PASSED(game->objects.bullet[i].ticks, BULLET_TICKS))
+                    get_elapsed=0;
+                i=5;
+
+            }
+            else
+                i++;
+        }
+
+    }
+            if (SDL_TICKS_PASSED(game->objects.elapsed, RELOAD))
+            get_elapsed=1;
+}
+
+
+/*
+void bullet_shot(GAME *game, int a)   a: npc id   -- old fct
+{
+    int i=0;
+
+    //if (!game->objects.bullet[0].started)
+    if (get_elapsed)
+        {
+            game->objects.elapsed=SDL_GetTicks();
+            get_elapsed=0;
+        }
+
+    for (i=0; i<5; i++)
+    {
+        if (!game->character.died)
+            if (collision_cercle(game->character.pos_cercle,game->objects.bullet[i].cercle))
+            {
+                game->character.died=1;
+                game->character.life--;
+                game->objects.bullet[i].started=0;
+            }
+
+        if (SDL_TICKS_PASSED(game->objects.elapsed,i*RELOAD))
+        {
+            if (!game->objects.bullet[i].started)
+            {
+                init_bullet(game,a,i);
+                game->objects.bullet[i].started=1;
+   //             fprintf(stderr,"he %d\n",game->objects.bullet[i].position.x);
+            }
+        }
+        if (i==4)
+            if (SDL_TICKS_PASSED(game->objects.elapsed,(i+1)*RELOAD))
+                get_elapsed=1;
+    }
+}
+*/
+
+
+##### ./functions.c #####
+/**
+
+* @file functions.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+
+#include <SDL/SDL.h>
+#include <SDL/SDL_image.h>
+#include <math.h>
+#include <SDL/SDL_ttf.h>
+#include <SDL/SDL_mixer.h>   // For SDL_mixer functions
+#include <string.h>
+#include "game.h"
+#include "functions.h"
+
+void init_items(GAME *game);
+
+void init_input(GAME *game)
+{
+    game->input.right=0;
+    game->input.left=0;
+    game->input.up=0;
+    game->input.down=0;
+    game->input.fix=0;
+    game->input.enter=0;
+    game->input.startJump=0;
+    game->input.jumpHeight=0;
+
+    game->arduino.right=0;
+    game->arduino.left=0;
+    game->arduino.up=0;
+}
+
+void init_characters(GAME *game)
+{
+
+    /* character principal */
+    game->character.position.x=434;
+    game->character.position.y=game->config.resolution_h-600;
+    game->character.life=3;
+    game->character.actuel=0;
+    game->character.look=0;
+    game->character.pos_cercle.r=30;
+    game->character.speed=12;
+
+    /* npc's */
+    if (game->level==1)
+    {
+        game->character.speed=12;
+
+        /* enemy 1*/
+        game->npc[0].position.x=2500;
+        game->npc[0].position.y=START_Y+465;
+        game->npc[0].direction=1;
+        game->npc[0].fix=0;
+        game->npc[0].life=1;
+        game->npc[0].actuel=0;
+        game->npc[0].look=0;
+        game->npc[0].speed=1;
+        game->npc[0].vision_range=350;
+        game->npc[0].behavior=PATROL;
+
+        /* officer */
+        game->npc[1].position.x=542;
+        game->npc[1].position.y=START_Y+465;
+        game->npc[1].direction=0;
+        game->npc[1].fix=0;
+        game->npc[1].life=100;
+        game->npc[1].actuel=0;
+        game->npc[1].look=0;
+        game->npc[1].speed=0;
+        game->npc[1].vision_range=0;
+
+        /* enemy 2 & 3 */
+        game->npc[2].position.x=4900;
+        game->npc[2].position.y=START_Y+465;
+        game->npc[2].direction=1;
+        game->npc[2].fix=0;
+        game->npc[2].life=1;
+        game->npc[2].actuel=0;
+        game->npc[2].look=0;
+        game->npc[2].speed=1;
+        game->npc[2].vision_range=330;
+        game->npc[2].behavior=PATROL;
+
+        game->npc[3].position.x=5800;
+        game->npc[3].position.y=START_Y+465;
+        game->npc[3].direction=-1;
+        game->npc[3].actuel=1;
+        game->npc[3].look=2;
+        game->npc[3].speed=1;
+        game->npc[3].vision_range=330;
+        game->npc[3].behavior=PATROL;
+
+        game->character.position.y+=300;
+    }
+    else if (game->level==2)
+    {
+        game->npc[4].position.x=8280;
+        game->npc[4].position.y=START_Y+400;
+        game->npc[4].direction=1;
+        game->npc[4].actuel=0;
+        game->npc[4].look=2;
+        game->npc[4].speed=0;
+        game->npc[4].vision_range=350;
+        game->npc[4].behavior=REFRACT;
+        game->character.speed=16;
+    }
+     else  if (game->level==3)
+       {
+         game->character.position.x=850;
+          game->character.position.y+=200;
+          game->character.speed=10;
+       }
+
+    else if (game->level==4)
+        {
+            game->character.position.x=game->config.resolution_w/2-120;
+            game->character.speed=12;
+        }
+
+
+}
+
+void init_global_vars(GAME *game)
+{
+    int i=0;
+    game->global.EOL=0;
+    game->gui.pos_dialogue.x=(game->config.resolution_w-game->gui.dialogue[0]->w)/2;
+    game->gui.pos_dialogue.y=90;
+    game->gui.pos_btn.x=(game->config.resolution_w-game->gui.dialogue[0]->w)/2 + 900;
+    game->gui.pos_btn.y=580;
+
+    game->background.pos_rain.h=PLAT_H;
+    game->background.pos_rain.w=PLAT_W;
+    game->background.pos_rain.x=0;
+    game->background.pos_rain.y=0;
+
+    game->texte.indice[0]=1;
+    game->global.fix=0;
+    game->global.stopDisplay=0;
+
+    for (i=0; i<5; i++) //bullet
+    {
+        game->objects.bullet[i].started=0;
+        game->objects.bullet[i].speed=26;
+        game->objects.bullet[i].direction=0;
+        game->objects.bullet[i].cercle.r=10;
+        game->objects.bullet[i].cercle.x=0;
+        game->objects.bullet[i].cercle.y=0;
+        game->global.get_elapsed_npc[i]=1;
+
+    }
+
+
+    game->texte.actuel=0;
+    game->texte.i=0;
+
+    game->texte.couleur.r = 255;
+    game->texte.couleur.g = 255;
+    game->texte.couleur.b = 255;
+
+    game->background.scroll_x=0;
+    game->background.scroll_y=0;
+    game->background.counter=0;
+
+    if (game->level==3)
+        game->background.scroll_x=10000-game->config.resolution_w;
+
+
+    game->gui.show_dialogue=0;
+    game->gui.show_inv=0;
+
+    game->character.died=0;
+
+    game->character.pos_cercle.r=30;
+
+    game->global.obj_i=0;
+    game->global.show_message=0;
+    game->sprite=2;
+
+    game->global.movement=0;
+    game->global.on_door=0;
+    game->texte.fix=0;
+
+    game->global.FIN=0;
+    game->global.fire_i=0;
+
+
+game->global.fix_died=0;
+game->global.frame_died=0;
+game->global.on_door=0;
+
+
+}
+
+void init_private_vars(GAME *game)
+{
+      int i=0;
+
+    switch(game->level)
+    {
+    case 1:
+        game->global.checkpoint=0;
+
+        game->objects.objective.position.x=8600;
+        game->objects.objective.position.y=START_Y+480;
+        game->objects.objective.cercle.x=8600;
+        game->objects.objective.cercle.y=START_Y+480;
+        game->objects.objective.cercle.r=20;
+
+
+        game->gui.pos_avatar.x=20;
+        game->gui.pos_avatar.y=START_Y+15;
+        game->gui.pos_hp.x=120;
+        game->gui.pos_hp.y=START_Y+110;
+
+        /* borders */
+        game->objects.borders.left[0]=0;
+        game->objects.borders.right[0]=10000;
+        game->objects.borders.left[1]=-1;
+        game->objects.borders.right[1]=-1;
+
+		game->objects.inventory.item[0].number=0;
+		game->objects.inventory.item[0].have=1;
+		game->objects.inventory.item[0].selected=1;
+		game->objects.inventory.count=1;
+
+		 game->global.fix_tutorial=0;
+		 game->global.on_tutorial=0;
+
+
+        break;
+    case 2:
+        game->global.checkpoint=0;
+
+        game->objects.objective.position.x=9340;
+        game->objects.objective.position.y=START_Y+460;
+        game->objects.objective.cercle.x=9340;
+        game->objects.objective.cercle.y=START_Y+460;
+        game->objects.objective.cercle.r=40;
+
+        game->gui.pos_avatar.x=25;
+        game->gui.pos_avatar.y=100;
+        game->gui.pos_hp.x=125;
+        game->gui.pos_hp.y=195;
+
+		game->global.level2_show_items=0;
+
+        /* borders */
+        game->objects.borders.left[0]=0;
+        game->objects.borders.right[0]=4020;
+
+        game->objects.borders.left[1]=4020;
+        game->objects.borders.right[1]=5350;
+
+        game->objects.borders.left[2]=5300;
+        game->objects.borders.right[2]=6830;
+
+        game->objects.borders.left[3]=6850;
+        game->objects.borders.right[3]=8870;
+
+        game->objects.borders.left[4]=9000;
+        game->objects.borders.right[4]=10000;
+        game->objects.borders.left[5]=-1;
+        game->objects.borders.right[5]=-1;
+
+        /*doors*/
+        for (i=0;i<5;i++)
+        {
+            game->objects.door[i].x=game->objects.borders.right[i]-150;
+            game->objects.door[i].y=START_Y+460;
+            game->objects.door[i].r=120;
+        }
+
+        game->objects.door[1].x=5200;
+
+
+
+		game->objects.inventory.item[0].number=0;
+		game->objects.inventory.item[0].have=0;
+		game->objects.inventory.item[0].selected=1;
+		game->objects.inventory.count=1;
+
+		game->objects.inventory.item[1].number=0;
+		game->objects.inventory.item[1].have=0;
+		game->objects.inventory.item[1].selected=0;
+		game->objects.inventory.count=1;
+
+
+		game->objects.inventory.item[2].number=0;
+		game->objects.inventory.item[2].have=0;
+		game->objects.inventory.item[2].selected=0;
+        game->objects.inventory.item[2].cercle.x=2000;
+		game->objects.inventory.item[2].cercle.y=START_Y+530;
+		game->objects.inventory.item[2].cercle.r=100;
+		game->objects.inventory.item[2].disposable=1;
+
+
+		game->objects.inventory.item[3].number=2;
+		game->objects.inventory.item[3].have=0;
+		game->objects.inventory.item[3].selected=0;
+        game->objects.inventory.item[3].cercle.x=5700;
+		game->objects.inventory.item[3].cercle.y=START_Y+530;
+		game->objects.inventory.item[3].cercle.r=100;
+		game->objects.inventory.item[3].disposable=1;
+
+
+        break;
+    case 3:
+        game->global.checkpoint=0;
+
+        game->objects.objective.position.x=294;
+        game->objects.objective.position.y=532;
+        game->objects.objective.cercle.x=350;
+        game->objects.objective.cercle.y=500;
+        game->objects.objective.cercle.r=40;
+
+        game->gui.pos_avatar.x=25;
+        game->gui.pos_avatar.y=100;
+        game->gui.pos_hp.x=125;
+        game->gui.pos_hp.y=195;
+
+        /* borders */
+        game->objects.borders.left[0]=0;
+        game->objects.borders.right[0]=10000;
+        game->objects.borders.left[1]=-1;
+        game->objects.borders.right[1]=-1;
+		game->objects.borders.left[2]=0;
+        game->objects.borders.right[2]=10000;
+		game->objects.borders.left[3]=0;
+        game->objects.borders.right[3]=10000;
+		game->objects.borders.left[4]=0;
+        game->objects.borders.right[4]=10000;
+		game->objects.borders.left[5]=0;
+        game->objects.borders.right[5]=10000;
+
+		/* doors */
+		game->objects.door[0].x=7600;
+        game->objects.door[0].y=START_Y+460;
+        game->objects.door[0].r=80;
+		game->objects.door[1].x=7162;
+		game->objects.door[1].y=START_Y+460;
+		game->objects.door[1].r=80;
+		game->objects.door[2].x=6300;
+		game->objects.door[2].y=START_Y+460;
+		game->objects.door[2].r=80;
+		game->objects.door[3].x=5690;
+		game->objects.door[3].y=START_Y+460;
+		game->objects.door[3].r=80;
+		game->objects.door[4].x=5265;
+		game->objects.door[4].y=START_Y+460;
+		game->objects.door[4].r=80;
+		game->objects.door[5].x=4825;
+		game->objects.door[5].y=START_Y+460;
+		game->objects.door[5].r=80;
+		game->objects.door[6].x=4185;
+		game->objects.door[6].y=START_Y+460;
+		game->objects.door[6].r=80;
+		game->objects.door[7].x=3310;
+		game->objects.door[7].y=START_Y+460;
+		game->objects.door[7].r=80;
+		game->objects.door[8].x=2711;
+		game->objects.door[8].y=START_Y+460;
+		game->objects.door[8].r=80;
+		game->objects.door[9].x=2291;
+		game->objects.door[9].y=START_Y+460;
+		game->objects.door[9].r=80;
+		game->objects.door[10].x=1835;
+		game->objects.door[10].y=START_Y+460;
+		game->objects.door[10].r=80;
+
+		/* coin */
+		game->objects.inventory.item[1].number=0;
+		game->objects.inventory.item[1].cercle.x=9400;
+		game->objects.inventory.item[1].cercle.y=START_Y+530;
+		game->objects.inventory.item[1].cercle.r=100;
+		game->objects.inventory.item[1].have=0;
+		game->objects.inventory.item[1].disposable=1;
+
+
+
+        break;
+
+    case 4:
+        game->global.checkpoint=0;
+
+        game->objects.objective.position.x=9850;
+        game->objects.objective.position.y=START_Y+460;;
+        game->objects.objective.cercle.x=9600;
+        game->objects.objective.cercle.y=START_Y+460;;
+        game->objects.objective.cercle.r=60;
+
+        game->gui.pos_avatar.x=25;
+        game->gui.pos_avatar.y=100;
+        game->gui.pos_hp.x=125;
+        game->gui.pos_hp.y=195;
+
+        /* borders */
+        game->objects.borders.left[0]=8000;
+        game->objects.borders.right[0]=10000;
+        game->objects.borders.left[1]=-1;
+        game->objects.borders.right[1]=-1;
+
+        break;
+    }
+}
+void init_variables(GAME *game)
+{
+  init_global_vars(game);
+  init_private_vars(game);
+
+}
+
+
+void load_images(GAME *game)
+{
+    int i = 0;
+    char died[30] = " ";
+    for (i = 0; i < 5; i++)
+        game->npc[i].image = NULL;
+
+    game->gui.avatar = IMG_Load("DATA/GFX/GUI/Avatar.png");
+
+    game->gui.btn_animated[0] = IMG_Load("DATA/GFX/GUI/up.png");
+    game->gui.btn_animated[1] = IMG_Load("DATA/GFX/GUI/down.png");
+
+    game->gui.inventaire = IMG_Load("DATA/GFX/inventory/inventory.png");
+    game->gui.frame = IMG_Load("DATA/GFX/inventory/frame.png");
+
+    if (game->level == 1)
+        game->character.image = IMG_Load("DATA/GFX/spritesheets/john_level1.png");
+    else
+        game->character.image = IMG_Load("DATA/GFX/spritesheets/sprites2.png");
+
+    for (i = 1; i < 33; i++)
+    {
+        sprintf(died, "DATA/GFX/WASTED/%d.png", i);
+        game->gui.died[i] = IMG_Load(died);
+    }
+
+    switch (game->level)
+    {
+    case 1:
+        game->gui.dialogue[0] = IMG_Load("DATA/GFX/GUI/Dialogue_JOHN.png");
+        game->gui.dialogue[1] = IMG_Load("DATA/GFX/GUI/Dialogue_POLICE.png");
+
+        game->background.image[0] = IMG_Load("DATA/GFX/Levels/Level1-1.png");
+        game->background.image[1] = IMG_Load("DATA/GFX/Levels/Level1-2.png");
+        game->background.image[2] = IMG_Load("DATA/GFX/Levels/rain-1.png");
+        game->background.image[3] = IMG_Load("DATA/GFX/Levels/rain-2.png");
+        game->background.image[4] = IMG_Load("DATA/GFX/Levels/rain-3.png");
+        game->background.levelCollision = IMG_Load("DATA/GFX/Levels/Level1-Collision.png");
+
+        game->npc[0].image = IMG_Load("DATA/GFX/spritesheets/bad_guy1.png");
+        game->npc[1].image = IMG_Load("DATA/GFX/spritesheets/police.png");
+        game->npc[2].image = IMG_Load("DATA/GFX/spritesheets/bad_guy1.png");
+        game->npc[3].image = IMG_Load("DATA/GFX/spritesheets/bad_guy1.png");
+
+        game->objects.tutorial[0] = IMG_Load("DATA/GFX/tutorial/frame.png");
+        for (i = 1; i < 9; i++)
+        {
+            sprintf(died, "DATA/GFX/tutorial/%d.bmp", i);
+            game->objects.tutorial[i] = IMG_Load(died);
+        }
+        game->objects.pos_tuto.x = game->config.resolution_w / 2 - 150;
+        game->objects.pos_tuto.y = game->config.resolution_h / 2 - 150;
+
+        break;
+
+    case 2:
+        game->gui.dialogue[0] = IMG_Load("DATA/GFX/GUI/Dialogue_JOHN.png");
+        game->gui.dialogue[1] = IMG_Load("DATA/GFX/GUI/Dialogue_BARMAN.png");
+        game->gui.dialogue[2] = IMG_Load("DATA/GFX/GUI/Dialogue_WADE.png");
+
+        game->npc[4].image = IMG_Load("DATA/GFX/spritesheets/jazzar1.png");
+
+        game->background.image[0] = IMG_Load("DATA/GFX/Levels/Level2-1.png");
+        game->background.image[1] = IMG_Load("DATA/GFX/Levels/Level2-2.png");
+        game->background.image[2] = IMG_Load("DATA/GFX/Levels/All Items.png");
+        game->background.levelCollision = IMG_Load("DATA/GFX/Levels/Level2-Collision.png");
+        break;
+
+    case 3:
+        game->gui.dialogue[0] = IMG_Load("DATA/GFX/GUI/Dialogue_JOHN.png");
+        // game->gui.dialogue[1] = IMG_Load("DATA/GFX/GUI/Dialogue_POLICE.png");
+
+        game->background.image[0] = IMG_Load("DATA/GFX/Levels/Level3-1.png");
+        game->background.image[1] = IMG_Load("DATA/GFX/Levels/Level3-2.png");
+        game->background.levelCollision = IMG_Load("DATA/GFX/Levels/Level3-Collision.png");
+        break;
+
+    case 4:
+        game->gui.dialogue[0] = IMG_Load("DATA/GFX/GUI/Dialogue_JOHN.png");
+
+        game->background.image[0] = IMG_Load("DATA/GFX/Levels/Level4.png");
+        game->background.image[1] = IMG_Load("DATA/GFX/Fire/1.png");
+        game->background.image[2] = IMG_Load("DATA/GFX/Fire/2.png");
+        game->background.image[3] = IMG_Load("DATA/GFX/Fire/3.png");
+        game->background.image[4] = IMG_Load("DATA/GFX/Fire/4.png");
+        game->background.image[5] = IMG_Load("DATA/GFX/Fire/5.png");
+        game->background.levelCollision = IMG_Load("DATA/GFX/Levels/Level4-Collision.png");
+        break;
+    }
+
+    for (i = 0; i < 5; i++)
+        game->objects.bullet[i].image = IMG_Load("DATA/GFX/spritesheets/bullet.png");
+
+    game->objects.objective.image = IMG_Load("DATA/GFX/spritesheets/objective.png");
+}
+
+void init_level(GAME *game)
+{
+    init_input(game);
+    load_images(game);
+	init_items(game);
+    init_variables(game);
+    init_characters(game);
+
+
+    game->texte.police = TTF_OpenFont("DATA/fonts/FSEX300.ttf", 24);
+
+    char dlg[25]=" ";
+    sprintf(dlg,"DATA/texte/level%d.dlg",game->level);
+    game->texte.f=fopen(dlg,"r");
+
+
+    SDL_FillRect(game->screen, NULL, SDL_MapRGB(game->screen->format, 0, 0, 0));
+    loading_screen(game);
+
+}
+
+/* Fin Initialisation */
+
+void loading_screen(GAME *game)
+{
+
+    SDL_Surface *loading[4];
+    SDL_Rect position_src= {PLAT_H,PLAT_W,0,0}, position_dst= {PLAT_H,PLAT_W,0,0};
+
+    position_dst.y=0;
+    position_dst.x=(game->config.resolution_w-1167)/2;
+
+    position_src.y=PLAT_H;
+    position_src.x=0;
+    position_src.h=600;
+    position_src.w=1167;
+
+    int i=0, j=0;
+
+    loading[0]=IMG_Load("DATA/GFX/loading screen/Boss_before.jpg");
+    loading[1]=IMG_Load("DATA/GFX/loading screen/Boss_after.jpg");
+    loading[2]=IMG_Load("DATA/GFX/loading screen/Wade_before.jpg");
+    loading[3]=IMG_Load("DATA/GFX/loading screen/Wade_after.jpg");
+
+    j=(rand()%2)*2;
+    SDL_BlitSurface(loading[j],NULL,game->screen,&position_dst);
+
+    while(position_src.y>0)
+    {
+        position_src.y-=rand()%6;
+        position_src.h=game->config.resolution_h-position_src.y;
+        position_dst.y=position_src.y;
+        if (position_src.y<0)
+            position_src.y=0;
+
+        SDL_BlitSurface(loading[j+1],&position_src,game->screen,&position_dst);
+        SDL_Flip(game->screen);
+    }
+
+    for (i=0; i<4; i++)
+        SDL_FreeSurface(loading[i]);
+
+
+}
+
+void blit_text(GAME *game)
+{
+    if (!game->texte.fix)
+    {
+        game->texte.couleur.r = 255;
+        game->texte.couleur.g = 255;
+        game->texte.couleur.b = 255;
+
+        game->gui.pos_dialogue.x=(game->config.resolution_w-game->gui.dialogue[0]->w)/2;
+        game->gui.pos_dialogue.y=90;
+
+        game->gui.pos_btn.x=(game->config.resolution_w-game->gui.dialogue[0]->w)/2 + 900;
+        game->gui.pos_btn.y=580;
+
+        game->texte.position.x = (game->config.resolution_w-game->gui.dialogue[0]->w)/2+50;
+        game->texte.position.y = 500;
+        game->texte.i=0;
+
+        game->texte=dialogue_lines(game->texte);
+        game->texte.fix=1;
+
+    }
+    game->texte.texte = TTF_RenderText_Solid(game->texte.police, game->texte.dialogue[game->texte.i], game->texte.couleur);
+    SDL_BlitSurface(game->texte.texte, NULL, game->screen, &game->texte.position);
+    game->texte.texte = TTF_RenderText_Solid(game->texte.police, game->texte.dialogue[game->texte.i+1], game->texte.couleur);
+    game->texte.position.y+=50;
+    SDL_BlitSurface(game->texte.texte, NULL, game->screen, &game->texte.position);
+    game->texte.position.y-=50;
+
+    SDL_Flip(game->screen);
+
+}
+
+Texte dialogue_lines(Texte texte)
+{
+    int i=0,j=0, lines=0,n=0;
+    char c=' ';
+    rewind(texte.f);
+    while (i!=texte.actuel)
+    {
+        while(c!='[')
+        {
+            c=fgetc(texte.f);
+        }
+        if (c=='[')
+        {
+            fscanf(texte.f,"%d]\n",&i);
+            c=fgetc(texte.f);
+        }
+    }
+    n=ftell(texte.f)-1;
+
+    if (i==texte.actuel)
+    {
+        c=' ';
+        while(c!='[')
+        {
+            c=fgetc(texte.f);
+            if (c=='\n')
+                lines++;
+        }
+
+    }
+    //fprintf(stderr,"%d",n);
+    fseek(texte.f,n,SEEK_SET);
+    i=0;
+    //lines/=2;
+    while(j<lines/2)
+    {
+        strcpy(texte.aux," ");
+        fscanf(texte.f,"%d\n",&texte.indice[j]);
+        texte.indice[j+1]=texte.indice[j];
+
+        fgets(texte.aux,100,texte.f);
+        texte.aux[strlen(texte.aux+1)]='\0';
+        strcpy(texte.dialogue[j],texte.aux);
+
+        strcpy(texte.aux," ");
+        fgets(texte.aux,100,texte.f);
+        texte.aux[strlen(texte.aux+1)]='\0';
+        strcpy(texte.dialogue[j+1],texte.aux);
+        j+=2;
+    }
+    texte.line=lines;
+    return (texte);
+}
+
+
+int SDL_TICKS_PASSED(unsigned int A, unsigned int B)
+{
+    return(SDL_GetTicks()-A>=B);
+}
+
+
+void load_music(GAME *game)
+{
+    char file[50]=" ";
+
+    sprintf(file,"DATA/SFX/level%d.mp3",game->level);
+    game->musique.ambient = Mix_LoadMUS(file);
+
+}
+
+void play_music(Music *musique)
+{
+    Mix_PlayMusic(musique->ambient, -1);
+	Mix_VolumeMusic(MIX_MAX_VOLUME/5);
+}
+
+void free_memory(GAME *game)
+{
+    int i=0;
+
+/*    for(i=0;i<5;i++)
+        if (game->background.image[i]!=NULL)
+            SDL_FreeSurface(game->background.image[i]);
+*/
+    SDL_FreeSurface(game->background.levelCollision);
+
+
+    SDL_FreeSurface(game->character.image);
+    SDL_FreeSurface(game->gui.avatar);
+    SDL_FreeSurface(game->gui.hp);
+    SDL_FreeSurface(game->gui.inventaire);
+
+    for (i=0;i<2;i++)
+    {
+        //SDL_FreeSurface(game->gui.btn_animated[0]);
+        SDL_FreeSurface(game->gui.btn_animated[i]);
+    }
+
+
+    for (i=0;i<2;i++)
+    {
+        if (game->gui.dialogue[i]!=NULL)
+            SDL_FreeSurface(game->gui.dialogue[i]);
+    }
+
+
+
+	for (i=1;i<33;i++)
+    {
+        if (game->gui.died[i]!=NULL)
+            SDL_FreeSurface(game->gui.died[i]);
+    }
+
+
+
+
+    for (i=0; i<5; i++)
+        if (game->npc[i].image!=NULL)
+            SDL_FreeSurface(game->npc[i].image);
+
+     for (i=0; i<5; i++)
+        if (game->objects.bullet[i].image!=NULL)
+             SDL_FreeSurface(game->objects.bullet[i].image);
+
+    Mix_FreeMusic(game->musique.ambient);
+
+}
+
+int center_camera(GAME *game)
+{
+    return (game->character.position.x+32>game->config.resolution_w/2 && game->character.position.x-32<game->config.resolution_w/2);
+}
+
+int random_case(GAME *game)
+{
+    return(((game->background.counter>20) && (game->background.counter <24)) || ((game->background.counter>25)&&(game->background.counter<29)) || ((game->background.counter>46) && (game->background.counter <50)) || ((game->background.counter>51)&&(game->background.counter<55)) || ((game->background.counter>56)&&(game->background.counter<60)) || ((game->background.counter>96)&&(game->background.counter<100)));
+}
+
+char *tostr(int x)
+{
+    char *ch=(char*)malloc(3*sizeof(char));
+    sprintf(ch,"%d",x);
+    return ch;
+}
+
+int relative_x(GAME *game, SDL_Rect position)
+{
+    return (position.x-game->background.scroll_x);
+}
+
+
+##### ./events.c #####
+#include <unistd.h>  // For POSIX systems like Linux
+#include <time.h>    // For timing functions
+#include "game.h"
+
+/**
+
+* @file events.c
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+*/
+
+void load_next_level(GAME *game);
+int save_level(GAME *game);
+void teleport_next_door(GAME *game);
+int pick_item(GAME *game);
+void drop_item(GAME *game);
+void reload_this_level(GAME *game);
+
+int manage_events(GAME *game, SDL_Event *event)
+{
+    int continuer=1;
+
+    if (SDL_PollEvent(event))
+    {
+
+        if ((*event).type==SDL_QUIT)
+        {
+            continuer=0;
+        }
+
+        else if ((*event).type==SDL_KEYDOWN)
+        {
+            switch((*event).key.keysym.sym)
+            {
+            case SDLK_RIGHT:
+            {
+                game->input.right=1;
+                game->input.left=0;
+            }
+            break;
+
+            case SDLK_LEFT:
+            {
+                game->input.left=1;
+                game->input.right=0;
+            }
+            break;
+
+            case SDLK_UP:
+            {
+                game->input.up=1;
+            }
+            break;
+
+            case SDLK_e:
+            {
+                game->gui.show_inv=1;
+            }
+            break;
+
+
+
+            case SDLK_RETURN:
+            {
+                game->input.enter=1;
+                if (game->character.died)
+                {
+                    game->character.died=0;
+                    game->global.fix_died=0;
+                    game->background.scroll_x=game->global.checkpoint;
+                    game->character.position.x=game->config.resolution_w/2;
+                    if (game->character.life<0)
+                        {
+                            game->character.life=3;
+                            game->global.checkpoint=0;
+                        }
+
+                }
+
+            }
+            break;
+
+            case SDLK_SPACE:
+                if (game->gui.show_dialogue)
+                {
+                    if(game->global.fix==1)
+                    {
+                        if (game->texte.i<game->texte.line-game->texte.line/2-2)
+                            game->texte.i+=2;
+                        else
+                        {
+                            game->gui.show_dialogue=0;
+                        }
+                        game->global.fix=2;
+                    }
+                }
+
+                break;
+
+            default:
+                break;
+            }
+        }
+
+        else if((*event).type==SDL_KEYUP)
+            switch((*event).key.keysym.sym)
+            {
+            case SDLK_ESCAPE:
+                if (game->global.stopDisplay==0)
+                {
+                    game->global.stopDisplay=1;
+                    game->dialogue.interrupt = 1;
+                    game->dialogue.saving_state = 1;
+                }
+                else
+                {
+                    game->global.stopDisplay=0;
+                    game->dialogue.interrupt = 0;
+                    game->dialogue.saving_state = 0;
+                }
+
+                break;
+
+            case SDLK_RIGHT:
+            {
+                game->dialogue.saving_state = 2;
+                game->input.right=0;
+            }
+            break;
+
+            case SDLK_LEFT:
+            {
+                game->dialogue.saving_state = 1;
+                game->input.left=0;
+            }
+            break;
+
+            case SDLK_UP:
+            {
+                game->input.up=0;
+            }
+            break;
+
+            case SDLK_e:
+                game->gui.show_inv=0;
+                break;
+
+
+            case SDLK_SPACE:
+                if (game->gui.show_dialogue)
+                    game->global.fix=1;
+                break;
+            case SDLK_F10:
+                load_next_level(game);
+                break;
+            case SDLK_r:
+                reload_this_level(game);
+                break;
+            case SDLK_RETURN:
+                if (game->dialogue.interrupt==1)
+                {
+                    if (game->dialogue.saving_state==1)
+                    {
+                        save_level(game);
+                        continuer=0;
+                    }
+                    else
+                        continuer=0;
+                }
+
+                if (game->global.EOL)
+                    load_next_level(game);
+
+                if (game->global.on_door)
+                    teleport_next_door(game);
+
+                if(pick_item(game)==0)
+                    drop_item(game);
+
+
+
+                break;
+
+            case SDLK_f:
+                game->background.scroll_x+=80;
+                break;
+
+            default:
+                break;
+
+            }
+
+    }
+
+
+    return continuer;
+}
+
+
+##### ./level.c #####
+#include <unistd.h>
+#include "game.h"
+#include "functions.h"
+#include "level.h"
+#include <math.h>
+
+
+
+/**
+
+* @file level.c
+
+* @brief contains the game loop
+
+* @author C Squad
+
+* @version 1.2
+
+* @date May 20, 2016
+
+**/
+
+void level1 (GAME *game);
+void display (GAME *game);
+
+
+void loadLevel(GAME *game)
+{
+    load_music(game);
+    init_level(game);
+
+    SDL_FillRect(game->screen, NULL, SDL_MapRGB(game->screen->format, 0, 0, 0));
+    play_music(&game->musique);
+    game->global.animate=0;
+}
+
+void load_next_level(GAME *game)
+{
+    game->level++;
+    game->global.stopDisplay=1;
+    Mix_PauseMusic();
+    game->global.stopDisplay=0;
+
+    //free_memory(game);
+    loadLevel(game);
+
+}
+
+
+void reload_this_level(GAME *game)
+{
+    game->global.stopDisplay=1;
+    Mix_PauseMusic();
+    game->global.stopDisplay=0;
+
+    //free_memory(game);
+    loadLevel(game);
+
+}
+
+void playLevel(GAME *game)
+{
+    int continuer = 1;
+    SDL_Event event;
+
+    unsigned int elapsed;
+    unsigned int lasttime = SDL_GetTicks();
+
+    load_menuQuit(game);
+    loadLevel(game);
+
+    game->global.stopDisplay = 0;
+
+    while (continuer)
+    {
+        lasttime = SDL_GetTicks();
+
+        if (!manage_events(game, &event))
+            continuer = 0;
+
+        if (!game->character.died)
+        {
+            if (game->level == 1)
+                level1(game);
+            else if (game->level == 2)
+                level2(game);
+            else if (game->level == 3)
+                level3(game);
+            else if (game->level == 4)
+                level4(game);
+        }
+
+        display(game);
+
+        if (game->global.FIN)
+        {
+            if (continuer)
+            {
+                if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 4, 1024) == -1)
+                {
+                    printf("[-] %s", Mix_GetError());
+                }
+                continuer = 0;
+                Mix_PauseMusic();
+                // play_video(game, "OUTRO.mpg") supprimé
+            }
+        }
+
+        if (game->dialogue.interrupt)
+            saving_menu(game, game->dialogue);
+
+        if (game->level != 4)
+        {
+            if (collision_cercle(game->character.pos_cercle, game->objects.objective.cercle)) // Fin du niveau ici
+            {
+                game->global.EOL = 1;
+                strcpy(game->texte.message, "Press Enter to advance");
+                game->global.show_message = 1;
+                game->texte.position.x = game->character.position.x + 50;
+                game->texte.position.y = game->character.position.y - 40;
+            }
+            else
+            {
+                if (game->global.EOL)
+                    game->global.show_message = 0;
+
+                game->global.EOL = 0;
+            }
+        }
+
+        elapsed = SDL_GetTicks() - lasttime;
+        if (elapsed < 1000 / FPS)
+            SDL_Delay(1000 / FPS - elapsed);
+    }
+    game->global.stopDisplay = 1;
+    SDL_Delay(100);
+    fclose(game->texte.f);
+    TTF_CloseFont(game->texte.police);
+}
+void playTutorial (GAME *game)
+{
+    int i=0;
+
+    for (i=1;i<9;i++)
+    {
+        SDL_BlitSurface(game->objects.tutorial[i],NULL,game->screen,&game->objects.pos_tuto);
+        SDL_BlitSurface(game->objects.tutorial[0],NULL,game->screen,&game->objects.pos_tuto);
+        SDL_Flip(game->screen);
+        SDL_Delay(600);
+    }
+
+}
+void level1 (GAME *game)
+{
+    if (!game->gui.show_dialogue && !game->gui.show_inv)
+        movement(game);
+
+    movement_npc(game, 0);
+    movement_npc(game, 2);
+    movement_npc(game, 3);
+
+    if (onTexte(game)>0)    //collision pixel par pixel to check dialogue
+    {
+        game->character.look=4;
+        game->character.actuel=0;
+        if(!game->global.fix)
+        {
+            game->texte.actuel=onTexte(game);
+            if (game->texte.actuel==1)
+                game->npc[1].actuel=1;
+            game->gui.show_dialogue=1;
+            game->global.fix=1;
+        }
+    }
+    else
+    {
+        game->npc[1].actuel=0;
+        game->global.fix=0;
+        game->texte.fix=0;
+        game->gui.show_dialogue=0;
+        game->texte.i=0;
+    }
+
+   if (TRUE_X>3500)
+        game->global.checkpoint=3500;
+    else if (TRUE_X>1200)
+        game->global.checkpoint=1200;
+
+
+}
+
+
+void level2 (GAME *game)
+{
+    int i=0;
+
+    if (!game->gui.show_dialogue && !game->gui.show_inv)
+    {
+        movement(game);
+        if (TRUE_X>8180)
+        {
+            if (game->objects.inventory.item[2].have==0 || game->objects.inventory.item[3].have==0)
+                game->background.scroll_x-=SPEED;
+        }
+    }
+
+
+    for (i=0; i<5; i++)
+    {
+        if (collision_cercle(game->character.pos_cercle,game->objects.door[i]))
+        {
+            sprintf(game->texte.message,"Press Enter");
+            game->global.on_door=1;
+            game->global.show_message=1;
+            game->texte.position.x=game->character.position.x + 30;
+            game->texte.position.y=game->character.position.y - 40;
+            break;
+        }
+        else
+        {
+            if (game->global.on_door)
+            {
+                game->global.on_door=0;
+                game->global.show_message=0;
+            }
+        }
+    }
+
+
+    if (onTexte(game)>0)    //collision pixel par pixel to check dialogue
+    {
+        if (game->input.enter)
+        {
+
+            if(!game->global.fix)
+            {
+                game->texte.actuel=onTexte(game);
+                game->gui.show_dialogue=1;
+                game->global.fix=1;
+            }
+        }
+        else
+        {
+            sprintf(game->texte.message,"Press Enter");
+            game->global.on_door=1;
+            game->global.show_message=1;
+            game->texte.position.x=game->character.position.x + 30;
+            game->texte.position.y=game->character.position.y - 40;
+        }
+    }
+    else
+    {
+        game->global.fix=0;
+
+        game->gui.show_dialogue=0;
+        game->texte.fix=0;
+        game->texte.i=0;
+        game->input.enter=0;
+    }
+
+
+
+
+    if (game->global.level2_show_items)
+    {
+        for (i=2; i<4; i++)
+            if (collision_cercle(game->character.pos_cercle, game->objects.inventory.item[i].cercle))
+                if (game->objects.inventory.item[i].have==0)
+                {
+                    sprintf(game->texte.message,"Press Enter");
+                    game->global.on_door=1;
+                    game->global.show_message=1;
+                    game->texte.position.x=game->character.position.x + 30;
+                    game->texte.position.y=game->character.position.y - 40;
+                }
+
+        if (collision_color(game)==GREEN)
+        {
+
+            sprintf(game->texte.message,"Press Enter");
+            game->global.green_item=1;
+            game->global.show_message=1;
+            game->texte.position.x=game->character.position.x + 30;
+            game->texte.position.y=game->character.position.y - 40;
+
+        }
+            else if (game->global.green_item)
+            {
+                game->global.blue_item=0;
+                game->global.show_message=0;
+                game->global.green_item=0;
+            }
+
+
+    }
+    else if (game->background.scroll_x>7000)
+        game->global.level2_show_items=1;
+
+
+}
+
+void level3 (GAME *game)
+{
+    int i=0;
+    if (!game->gui.show_inv)
+        movement_level3(game);
+
+
+
+    for (i=0; i<11; i++)
+    {
+        if (collision_cercle(game->character.pos_cercle,game->objects.door[i]))
+        {
+            sprintf(game->texte.message,"Press Enter");
+            game->global.on_door=1;
+            game->global.show_message=1;
+            game->texte.position.x=game->character.position.x + 30;
+            game->texte.position.y=game->character.position.y - 40;
+            break;
+        }
+        else
+        {
+            if (game->global.on_door)
+            {
+                game->global.on_door=0;
+
+                game->global.show_message=0;
+            }
+        }
+
+    }
+
+
+    if (collision_cercle(game->character.pos_cercle, game->objects.inventory.item[1].cercle))
+        if (game->objects.inventory.item[1].have==0)
+        {
+            sprintf(game->texte.message,"Press Enter");
+            game->global.on_door=1;
+            game->global.show_message=1;
+            game->texte.position.x=game->character.position.x + 30;
+            game->texte.position.y=game->character.position.y - 40;
+        }
+
+
+    SDL_Delay(2);
+}
+
+void level4 (GAME *game)
+{
+    if (game->character.position.x < 150 || collision_fall(game))
+    {
+        SDL_FillRect(game->screen, NULL, SDL_MapRGB(game->screen->format, 0, 0, 0));
+
+        loading_screen(game);
+        game->character.life--;
+        game->background.scroll_x=0;
+        game->character.position.x=game->config.resolution_w/2;
+    }
+
+    if (collision_cercle(game->character.pos_cercle, game->objects.objective.cercle))
+    {
+        SDL_Delay(300);
+        game->global.FIN=1;
+    }
+
+    if (!game->global.FIN)
+    {
+
+        if (game->background.scroll_x<8600)
+        {
+            game->input.right=1;
+            mouvement_level4(game);
+            game->input.right=0;
+        }
+        else
+        {
+            //movement(game);
+            game->input.right=1;
+            mouvement_level4(game);
+            game->input.right=0;
+            SDL_Delay(15);
+        }
+
+
+    }
+
+}
+
+
+void teleport_next_door(GAME *game)
+{
+    int i=0;
+    if (game->level==2)
+    {
+        for (i=0; i<5; i++)
+        {
+            if (collision_cercle(game->character.pos_cercle,game->objects.door[i]))
+            {
+                if (TRUE_X<=game->objects.door[i].x)
+                {
+                    game->character.position.x=50;
+                    if (game->background.scroll_x+2*game->config.resolution_w<game->background.image[0]->w)
+                        game->background.scroll_x+=game->config.resolution_w;
+                    else
+                    {
+                        game->background.scroll_x=game->background.image[0]->w-game->config.resolution_w;
+                        game->character.position.x+=200;
+                    }
+                }
+                else
+                {
+                    game->character.position.x=game->config.resolution_w-100;
+                    game->background.scroll_x-=game->config.resolution_w;
+
+                }
+            }
+        }
+    }
+    else if (game->level==3)
+    {
+        for (i=0; i<11; i++)
+        {
+            if (collision_cercle(game->character.pos_cercle,game->objects.door[i]))
+            {
+                switch(i)
+                {
+                case 0:
+                    game->background.scroll_x=6240-22;
+                    game->character.position.x=game->objects.door[1].x-game->background.scroll_x;
+                    break;
+                case 1:
+                    game->background.scroll_x=3265-22;
+                    game->character.position.x=game->objects.door[7].x-game->background.scroll_x;
+                    break;
+                case 2:
+                    game->background.scroll_x=4765-22;
+                    game->character.position.x=game->objects.door[3].x-game->background.scroll_x;
+                    break;
+                case 3:
+                    game->background.scroll_x=4765-22;
+                    game->character.position.x=game->objects.door[5].x-game->background.scroll_x;
+                    break;
+                case 4:
+                    game->background.scroll_x=3265-22;
+                    game->character.position.x=game->objects.door[6].x-game->background.scroll_x;
+                    break;
+                case 5:
+                    game->background.scroll_x=1780-22;
+                    game->character.position.x=game->objects.door[9].x-game->background.scroll_x;
+                    break;
+                case 6:
+                    game->background.scroll_x=6240-22;
+                    game->character.position.x=game->objects.door[1].x-game->background.scroll_x;
+                    break;
+                case 7:
+                    game->background.scroll_x=6240-22;
+                    game->character.position.x=game->objects.door[2].x-game->background.scroll_x;
+                    break;
+                case 8:////
+                    game->background.scroll_x=242-22;
+                    game->character.position.x=game->config.resolution_w/2;
+                    break;
+                case 9:
+                    game->background.scroll_x=6240-22;
+                    game->character.position.x=game->objects.door[1].x-game->background.scroll_x;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+
+void display(GAME *game)
+{
+    if (!game->global.stopDisplay)
+    {
+        game->background.counter++;
+        if (game->background.counter>100)
+            game->background.counter=0;//rand()%100;
+
+        getPositions(game);
+        update_screen(game);
+
+    }
+}
+
+
+
+
+##### ./display.h #####
+#ifndef DISPLAY_H_INCLUDED
+#define DISPLAY_H_INCLUDED
+
+void blit_bullet(GAME *game);
+int update_display (void *data);
+void getPositions(GAME *game);
+void update_screen(GAME *game);
+void BlitNPC(GAME *game);
+int random_case(GAME *game);
+void blit_text(GAME *game);
+void show_message(GAME *game);
+
+
+#endif // DISPLAY_H_INCLUDED
+
+
+##### ./items.c #####
+#include "game.h"
+#include "level.h"  // Add this to include the declaration of collision_cercle
+
+/**
+ * @file items.c
+ * @author C Squad
+ * @version 1.0
+ * @date May 14, 2016
+ */
+
+void inventory_options(GAME *game);
+int fix_inv = 0;
+
+void init_items(GAME *game)
+{
+    int i = 0;
+    char item[40] = " ";
+    game->objects.inventory.count = 0;
+    for (i = 0; i < MAX_ITEMS; i++)
+    {
+        game->objects.inventory.item[i].number = 0;
+        game->objects.inventory.item[i].have = 0;
+        game->objects.inventory.item[i].disposable = 0;
+        game->objects.inventory.item[i].position.x = 0;
+        game->objects.inventory.item[i].position.y = 0;
+        sprintf(item, "DATA/GFX/inventory/item%d.png", i);
+        game->objects.inventory.item[i].image = IMG_Load(item);
+        sprintf(item, "DATA/GFX/inventory/description%d.png", i);
+        game->objects.inventory.item[i].description = IMG_Load(item);
+    }
+}
+
+int pick_item(GAME *game)
+{
+    int i = 0;
+    for (i = 0; i < MAX_ITEMS; i++)
+    {
+        if (collision_cercle(game->character.pos_cercle, game->objects.inventory.item[i].cercle))
+        {
+            if (game->objects.inventory.item[i].have == 0)
+            {
+                if (game->objects.inventory.item[i].disposable)
+                {
+                    // game->objects.inventory.item[i].number=0;//game->objects.inventory.count;
+                    game->objects.inventory.count++;
+                    game->objects.inventory.item[i].have = 1;
+                    game->objects.inventory.item[i].selected = 0;
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void drop_item(GAME *game)
+{
+    int i = 0;
+    for (i = 0; i < MAX_ITEMS; i++)
+    {
+        if (game->objects.inventory.item[i].have == 1)
+        {
+            if (game->objects.inventory.item[i].selected)
+            {
+                if (game->objects.inventory.item[i].disposable)
+                {
+                    game->objects.inventory.item[i].cercle.x = TRUE_X; // +game->character.direction*50;
+                    game->objects.inventory.item[i].have = 0;
+                    game->objects.inventory.item[i].selected = 0;
+                }
+            }
+        }
+    }
+}
+
+void show_inventory(GAME *game)
+{
+    int i = 0;
+
+    game->gui.pos_inv.x = game->character.position.x + 30;
+    game->gui.pos_inv.y = game->character.position.y - 90;
+
+    SDL_BlitSurface(game->gui.inventaire, NULL, game->screen, &game->gui.pos_inv);
+
+    for (i = 0; i < MAX_ITEMS; i++)
+    {
+        if (game->objects.inventory.item[i].have == 1)
+        {
+            game->objects.inventory.item[i].position.y = game->gui.pos_inv.y + 5;
+            game->objects.inventory.item[i].position.x = game->gui.pos_inv.x + game->objects.inventory.item[i].number * 42 + 6 + game->objects.inventory.item[i].number * 5;
+            SDL_BlitSurface(game->objects.inventory.item[i].image, NULL, game->screen, &game->objects.inventory.item[i].position);
+            if (game->objects.inventory.item[i].selected == 1)
+            {
+                // game->objects.inventory.item[i].position.x+=game->objects.inventory.item[i].number*5;
+                SDL_BlitSurface(game->gui.frame, NULL, game->screen, &game->objects.inventory.item[i].position);
+                game->objects.inventory.item[i].position.y = game->gui.pos_inv.y - game->objects.inventory.item[i].description->h - 20;
+                game->objects.inventory.item[i].position.x = game->gui.pos_inv.x;
+                SDL_BlitSurface(game->objects.inventory.item[i].description, NULL, game->screen, &game->objects.inventory.item[i].position);
+            }
+        }
+    }
+    if (game->level == 3)
+        game->objects.inventory.item[0].selected = 1;
+    inventory_options(game);
+}
+
+void inventory_options(GAME *game)
+{
+    int i = 0;
+
+    if (game->input.right && !fix_inv)
+    {
+        fix_inv = 1;
+        for (i = 0; i < MAX_ITEMS - 1; i++)
+        {
+            if (game->objects.inventory.item[i].selected)
+            {
+                game->objects.inventory.item[i].selected = 0;
+                game->objects.inventory.item[i + 1].selected = 1;
+                break;
+            }
+        }
+    }
+
+    if (game->input.left && !fix_inv)
+    {
+        for (i = 1; i < MAX_ITEMS; i++)
+        {
+            if (game->objects.inventory.item[i].selected)
+            {
+                game->objects.inventory.item[i].selected = 0;
+                game->objects.inventory.item[i - 1].selected = 1;
+                break;
+            }
+        }
+    }
+
+    if (game->input.right == 0 && game->input.left == 0)
+        fix_inv = 0;
+}
+
+
+##### ./bullet.h #####
+#ifndef BULLET_H_INCLUDED
+#define BULLET_H_INCLUDED
+#include "game.h"
+
+typedef struct Bullet
+{
+	SDL_Surface *image;
+	SDL_Rect  position, relativePos;
+	Cercle cercle;
+	int speed, started, direction, moving;
+	unsigned int ticks, elapsed;
+}Bullet;
+
+
+
+
+#endif // BULLET_H_INCLUDED
+
+
+##### ./main.c #####
+#include "game.h"
+#include "functions.h"  // intro.h supprimé
+#include "level.h"
+
+/**
+ * @file main.c
+ * @brief It never ends main.
+ * @author C Squad
+ * @version 1.0
+ * @date May 14, 2016
+ */
+
+int game_menu(GAME *game);
+int get_config(GAME *game);
+
+int main(int argc, char *argv[]) {
+    GAME game = {0}; // Initialisation à zéro pour éviter un comportement indéfini
+
+    // Initialisation des sous-systèmes SDL
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return EXIT_FAILURE;
+    }
+
+    // Définition du titre et de l'icône de la fenêtre
+    SDL_WM_SetCaption("It never ends", NULL);
+    SDL_Surface *icon = IMG_Load("DATA/GFX/GUI/Loupe.png");
+    if (!icon) {
+        fprintf(stderr, "Failed to load icon: %s\n", IMG_GetError());
+    } else {
+        SDL_WM_SetIcon(icon, NULL);
+        SDL_FreeSurface(icon); // Libération de la surface après utilisation
+    }
+
+    // Chargement de la configuration ou utilisation des valeurs par défaut
+    if (get_config(&game) == 0) {
+        if (game.config.fullscreen == 1) {
+            game.screen = SDL_SetVideoMode(game.config.resolution_w, game.config.resolution_h, 32,
+                                           SDL_DOUBLEBUF | SDL_HWSURFACE | SDL_FULLSCREEN);
+        } else {
+            game.screen = SDL_SetVideoMode(game.config.resolution_w, game.config.resolution_h, 32,
+                                           SDL_DOUBLEBUF | SDL_HWSURFACE);
+        }
+    } else {
+        // Configuration par défaut si le fichier de config est absent
+        game.screen = SDL_SetVideoMode(1280, 720, 32, SDL_DOUBLEBUF | SDL_HWSURFACE);
+    }
+
+    // Vérification de l'initialisation de l'écran
+    if (!game.screen) {
+        fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
+        SDL_Quit();
+        return EXIT_FAILURE;
+    }
+
+    // Initialisation de TTF et SDL_Mixer
+    if (TTF_Init() < 0) {
+        fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
+        SDL_Quit();
+        return EXIT_FAILURE;
+    }
+
+    if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) == -1) {
+        fprintf(stderr, "Mix_OpenAudio failed: %s\n", Mix_GetError());
+        TTF_Quit();
+        SDL_Quit();
+        return EXIT_FAILURE;
+    }
+
+    // L'appel à intro(&game) est supprimé
+
+    // Affichage de l'écran de chargement
+    loading_screen(&game);
+
+    // Démarrage du menu du jeu
+    start_menu(&game);
+
+    // Nettoyage des ressources
+    SDL_FreeSurface(game.screen);
+    TTF_Quit();
+    Mix_CloseAudio();
+    SDL_Quit();
+
+    return EXIT_SUCCESS;
+}
+
+int get_config(GAME *game) {
+    game->config.f = fopen("config/config.cfg", "r");
+    if (game->config.f != NULL) {
+        fscanf(game->config.f, "[resolution]\n");
+        fscanf(game->config.f, "w=%d\n", &game->config.resolution_w);
+        fscanf(game->config.f, "h=%d\n", &game->config.resolution_h);
+        fscanf(game->config.f, "fullscreen=%d\n", &game->config.fullscreen);
+        fclose(game->config.f); // Fermeture du fichier après lecture
+        return 0;
+    } else {
+        return -1; // Retourne -1 si le fichier est absent
+    }
+}
+
+void start_menu(GAME *game) {
+    if (game_menu(game) == 0) {
+        playLevel(game);
+    }
+}
+
+
+##### ./functions.h #####
+#ifndef FONCTIONS_H_INCLUDED
+#define FONCTIONS_H_INCLUDED
+#include "game.h"
+#include "bullet.h"
+
+int relative_x(GAME *game, SDL_Rect position);
+char *tostr(int x);
+int random_case(GAME *game);
+int center_camera(GAME *game);
+void free_memory(GAME *game);
+int SDL_TICKS_PASSED(unsigned int A, unsigned int B);
+void loading_screen(GAME *game);
+void blit_text(GAME *game);
+Texte dialogue_lines(Texte texte);
+void load_music(GAME *game);
+void init_level(GAME *game);
+// void play_video(GAME *game, char filename[30]); supprimé
+Color collision_color(GAME *game);
+
+void init_bullet(GAME *game, int a, int b);
+void blit_bullet(GAME *game);
+void bullet_shot(GAME *game, int a);
+
+void load_menuQuit(GAME *game);
+
+void show_inventory(GAME *game);
+
+void start_menu(GAME *game);
+
+#endif // FONCTIONS_H_INCLUDED
+
+
+##### ./mouvement.c #####
+#include "game.h"
+#include "functions.h"
+#include "level.h"
+#include "collision.h"
+
+/**
+
+* @file mouvement.c
+
+* @brief It never ends
+
+* @author C Squad
+
+* @version 1.0
+
+* @date May 14, 2016
+
+* player movement and camera management.
+
+*/
+
+int center_camera(GAME *game);
+void update_screen(GAME *game);
+int Collision_PPP(GAME *game, Character perso);
+
+
+
+
+
+int borders_test(GAME *game)
+{
+    printf("a");
+    int j = 0;
+
+    if (game->input.right || game->arduino.right)
+    {
+        while (game->objects.borders.left[j] != -1)
+        {
+            if (TRUE_X > game->objects.borders.left[j] && TRUE_X < game->objects.borders.right[j])
+                return (game->background.scroll_x + game->config.resolution_w > game->objects.borders.right[j]);
+            else
+                j++;
+        }
+        return 0;  // Add this return for when the while loop exits
+    }
+    return 0;  // Add this return for when the if condition is false
+}
+
+void movement(GAME *game)
+{
+        /* Right */
+
+        if ((game->input.right || game->arduino.right) && !Collision_PPP(game,game->character))
+        {
+            game->background.scroll_x+=SPEED;
+            if (borders_test(game))//game->background.scroll_x > game->background.image[0]->w-game->config.resolution_w)
+            {
+                game->background.scroll_x-=SPEED;
+                game->character.position.x+=SPEED;
+                if (game->character.position.x>game->config.resolution_w-game->character.position.w)
+                    game->character.position.x-=SPEED;
+            }
+
+            if (!center_camera(game))
+            {
+                if (game->character.position.x<game->config.resolution_w/2)
+                {
+                    game->character.position.x+=SPEED;
+                    game->background.scroll_x-=SPEED;
+                }
+            }
+
+
+            if (game->character.look>5)
+            {
+                game->character.look=0;
+                game->character.actuel=0;
+            }
+
+            game->character.actuel++;
+            if (game->character.actuel>5)
+            {
+                game->character.actuel=0;
+                game->character.look++;
+            }
+            if (game->character.look>3)
+                game->character.look=0;
+
+            game->global.movement=0;
+        }
+
+        /* Left */
+
+        else if ((game->input.left || game->arduino.left) && !Collision_PPP(game,game->character))
+        {
+            game->background.scroll_x-=SPEED;
+            if (game->background.scroll_x<0)
+            {
+                game->background.scroll_x+=SPEED;
+                game->character.position.x-=SPEED;
+                if (game->character.position.x<0)
+                    game->character.position.x+=SPEED;
+            }
+
+            if (!center_camera(game))
+            {
+                if (game->character.position.x>game->config.resolution_w/2)
+                {
+                    game->character.position.x-=SPEED;
+                    game->background.scroll_x+=SPEED;
+                }
+            }
+            if (game->character.look<5)
+            {
+                game->character.look=5;
+                game->character.actuel=5;
+            }
+
+            game->character.actuel--;
+            if (game->character.actuel<1)
+            {
+                game->character.actuel=5;
+                game->character.look++;
+            }
+            if (game->character.look>8)
+                game->character.look=4;
+
+
+            game->global.movement=1;
+
+        }
+
+        else// if (!collision_pente(game))
+        {
+            if (game->global.movement==0)
+            {
+                game->character.look=4;
+                game->character.actuel=0;
+            }
+            else
+            {
+                game->character.look=9;
+                game->character.actuel=5;
+            }
+        }
+
+        if ((game->input.up || game->arduino.up) && !game->input.fix)
+        {
+            game->input.startJump = 1;
+        }
+
+        /* JUMP START */
+
+        if (game->input.startJump)
+        {
+            game->input.fix=1;
+
+            if (game->input.jumpHeight < maxJmpH)
+            {
+                game->input.jumpHeight += JUMP_POWER;
+                game->character.position.y -= JUMP_POWER + 2*GRAVITY;
+            }
+            else
+            {
+                game->input.startJump=0;
+                game->input.jumpHeight=0;
+            }
+        }
+
+        /* JUMP END */
+
+
+
+        /* GRAVITY */
+        game->character.position.y+=GRAVITY;
+
+        if (onGround(game, game->character))
+        {
+            game->character.position.y-=GRAVITY;
+            game->input.fix=0;
+        }
+
+        game->character.position.y+=GRAVITY;
+
+        if (onGround(game, game->character))
+        {
+            game->character.position.y-=GRAVITY;
+            game->input.fix=0;
+        }
+
+
+
+    game->character.pos_cercle.x=game->character.position.x+game->background.scroll_x;
+    game->character.pos_cercle.y=game->character.position.y+40;
+    game->character.pos_cercle.r=30;
+
+}
+
+
+void mouvement_level4(GAME *game)
+{
+    int JMP_POWER=16;
+
+    if (!Collision_PPP(game,game->character))
+    {
+        game->background.scroll_x+=SPEED;
+        if (game->background.scroll_x>10000-game->config.resolution_w)
+        {
+            game->background.scroll_x-=SPEED;
+            game->character.position.x+=SPEED;
+        }
+    }
+
+    else
+    {
+        game->background.scroll_x+=SPEED;
+        game->character.position.x-=SPEED;
+    }
+
+
+            if (game->character.look>5)
+            {
+                game->character.look=0;
+                game->character.actuel=0;
+            }
+
+            game->character.actuel++;
+            if (game->character.actuel>5)
+            {
+                game->character.actuel=0;
+                game->character.look++;
+            }
+            if (game->character.look>3)
+                game->character.look=0;
+
+        /* JUMP START */
+
+        if (game->input.up && !game->input.fix)
+        {
+            game->input.startJump = 1;
+        }
+
+        if (game->input.startJump)
+        {
+            game->input.fix=1;
+
+            if (game->input.jumpHeight < 160) //MAX_JmpH
+            {
+                game->input.jumpHeight += JMP_POWER; //var
+                game->character.position.y -= JMP_POWER + 2*GRAVITY;
+            }
+            else
+            {
+                game->input.startJump=0;
+                game->input.jumpHeight=0;
+            }
+        }
+
+        /* JUMP END */
+
+
+
+        /* GRAVITY */
+        game->character.position.y+=GRAVITY;
+
+        if (onGround(game, game->character))
+        {
+            game->character.position.y-=GRAVITY;
+            game->input.fix=0;
+        }
+
+        game->character.position.y+=GRAVITY;
+
+        if (onGround(game, game->character))
+        {
+            game->character.position.y-=GRAVITY;
+            game->input.fix=0;
+        }
+
+    if (collision_pente(game) && game->input.right)
+        {
+            game->character.position.y-=5;
+            //game->character.position.x+=SPEED;
+        }
+
+
+game->character.pos_cercle.x=TRUE_X;
+game->character.pos_cercle.y=game->character.position.y+game->character.position.h/2;
+}
+
+
+void movement_level3(GAME *game)
+{
+	if (game->background.scroll_x>7600)
+	{
+        if (game->input.right && !Collision_PPP(game,game->character))
+        {
+            game->background.scroll_x+=SPEED;
+            if (borders_test(game))
+            {
+                game->background.scroll_x-=SPEED;
+                game->character.position.x+=SPEED;
+                if (game->character.position.x>game->config.resolution_w-game->character.position.w)
+                    game->character.position.x-=SPEED;
+            }
+
+            if (!center_camera(game))
+            {
+                if (game->character.position.x<game->config.resolution_w/2)
+                {
+                    game->character.position.x+=SPEED;
+                    game->background.scroll_x-=SPEED;
+                }
+            }
+
+
+            if (game->character.look>5)
+            {
+                game->character.look=0;
+                game->character.actuel=0;
+            }
+
+            game->character.actuel++;
+            if (game->character.actuel>5)
+            {
+                game->character.actuel=0;
+                game->character.look++;
+            }
+            if (game->character.look>3)
+                game->character.look=0;
+
+            game->global.movement=0;
+        }
+
+        /* ------------------------------------------------------ */
+
+        else if (game->input.left && !Collision_PPP(game,game->character))
+        {
+            game->background.scroll_x-=SPEED;
+            if (game->background.scroll_x<0)
+            {
+                game->background.scroll_x+=SPEED;
+                game->character.position.x-=SPEED;
+                if (game->character.position.x<0)
+                    game->character.position.x+=SPEED;
+            }
+
+            if (!center_camera(game))
+            {
+                if (game->character.position.x>game->config.resolution_w/2)
+                {
+                    game->character.position.x-=SPEED;
+                    game->background.scroll_x+=SPEED;
+                }
+            }
+            if (game->character.look<5)
+            {
+                game->character.look=5;
+                game->character.actuel=5;
+            }
+
+            game->character.actuel--;
+            if (game->character.actuel<1)
+            {
+                game->character.actuel=5;
+                game->character.look++;
+            }
+            if (game->character.look>8)
+                game->character.look=4;
+
+
+            game->global.movement=1;
+
+        }
+
+        else// if (!collision_pente(game))
+        {
+            if (game->global.movement==0)
+            {
+                game->character.look=4;
+                game->character.actuel=0;
+            }
+            else
+            {
+                game->character.look=9;
+                game->character.actuel=5;
+            }
+        }
+
+	}
+
+	else
+	{
+
+if (game->input.right && !Collision_PPP(game,game->character))
+        {
+
+            game->character.position.x+=SPEED;
+
+            if (game->character.look>5)
+            {
+                game->character.look=0;
+                game->character.actuel=0;
+            }
+
+            game->character.actuel++;
+            if (game->character.actuel>5)
+            {
+                game->character.actuel=0;
+                game->character.look++;
+            }
+            if (game->character.look>3)
+                game->character.look=0;
+
+            game->global.movement=0;
+        }
+
+        /* ------------------------------------------------------ */
+
+        else if (game->input.left && !Collision_PPP(game,game->character))
+         {
+			 game->character.position.x-=SPEED;
+
+
+            if (game->character.look<5)
+            {
+                game->character.look=5;
+                game->character.actuel=5;
+            }
+
+            game->character.actuel--;
+            if (game->character.actuel<1)
+            {
+                game->character.actuel=5;
+                game->character.look++;
+            }
+            if (game->character.look>8)
+                game->character.look=4;
+
+
+            game->global.movement=1;
+
+        }
+
+        else
+        {
+            if (game->global.movement==0)
+            {
+                game->character.look=4;
+                game->character.actuel=0;
+            }
+            else
+            {
+                game->character.look=9;
+                game->character.actuel=5;
+            }
+        }
+	}
+
+        /* GRAVITY */
+        game->character.position.y+=GRAVITY;
+
+        if (onGround(game, game->character))
+        {
+            game->character.position.y-=GRAVITY;
+            game->input.fix=0;
+        }
+
+
+
+    game->character.pos_cercle.x=game->character.position.x+game->background.scroll_x;
+    game->character.pos_cercle.y=game->character.position.y+40;
+    game->character.pos_cercle.r=30;
+
+}
+
+
+
+##### ./collision.h #####
+#ifndef COLLISIONS_H
+#define COLLISIONS_H
+
+
+#include "game.h"
+
+struct GAME;        // Forward declaration
+struct Character;
+
+extern int collision_fall(struct GAME *game);
+extern int onGround(struct GAME *game, struct Character perso);
+extern int collision_pente(struct GAME *game);
+extern int Collision_PPP(struct GAME *game, struct Character perso);
+
+typedef struct 
+{
+int x,y;
+int h,w;
+}Box;
+
+
+typedef struct 
+{
+int x,y;
+int r;
+}Cercle;
+
+
+
+#endif // COLLISIONS_H
